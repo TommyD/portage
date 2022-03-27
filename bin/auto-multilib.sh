@@ -101,7 +101,7 @@ has_multilib_profile() {
 }
 
 is_auto-multilib() {
-	if has_multilib_profile && ! has multilib-native ${INHERITED} && ! use multilib && ! use abi_x86_32; then
+	if has_multilib_profile && ! has multilib-native ${INHERITED} && ! use multilib && ! use abi_x86_64 && ! use abi_x86_32; then
 		for i in ${MULTILIB_ABIS} ; do
 			use multilib_abi_"${i}" && [[ "${i}" != "${DEFAULT_ABI}" ]] && return 0
 		done
@@ -202,9 +202,7 @@ unset_abi() {
 }
 
 _get_abi_string() {
-	[[ " ${FEATURES} " == *" force-multilib "* ]] && \
-		is_auto-multilib && [ -n "${ABI}" ] && \
-		echo " (for ABI=${ABI})"
+	[ -n "${ABI}" ] && echo " (for ABI=${ABI})"
 }
 
 _setup_abi_env() {
@@ -315,7 +313,13 @@ _finalize_abi_install() {
 
 		mv "${D}" "${D%/}".${ABI} || die
 		for my_abi in ${ALL_ABIS}; do
-			[[ -e "${D%/}".${my_abi} ]] || return 0
+#			[[ -e "${D%/}".${my_abi} ]] || return 0
+			if [[ -e "${D%/}".${my_abi} ]] ; then
+				continue
+			else
+				rm -f "${PORTAGE_BUILDDIR}"/.setuped
+				return 0
+			fi
 		done
 	fi
 

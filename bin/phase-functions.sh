@@ -234,6 +234,12 @@ __dyn_pretend() {
 }
 
 __dyn_setup() {
+	if [[ -e $PORTAGE_BUILDDIR/.setuped ]] ; then
+		__vecho ">>> It appears that '$PF' is already setup; skipping."
+		__vecho ">>> Remove '$PORTAGE_BUILDDIR/.setuped' to force setup."
+		return 0
+	fi
+
 	if [[ " ${FEATURES} " == *" force-multilib "* ]]; then
 		if ! is_auto-multilib && ! use multilib_abi_"${DEFAULT_ABI}" ; then
 			ewarn
@@ -242,28 +248,14 @@ __dyn_setup() {
 			ewarn "Enabling the default ABI now"
 			ewarn
 		fi
+		set_abi $(get_abi_list)
+		rm -f "${T}"/environment
 	fi
-	for LOOP_ABI in $(get_abi_list); do
-		if [[ " ${FEATURES} " == *" force-multilib "* ]]; then
-			set_abi ${LOOP_ABI}
-			rm -f "${T}"/environment
-			if [[ -e $PORTAGE_BUILDDIR/.setuped.${ABI} ]] ; then
-				__vecho ">>> It appears that '$PF' is already setup; skipping."
-				__vecho ">>> Remove '$PORTAGE_BUILDDIR/.setuped.${ABI}' to force setup."
-				return 0
-			fi
-		fi
 	__ebuild_phase pre_pkg_setup
 	__ebuild_phase pkg_setup
-	>> "$PORTAGE_BUILDDIR/.setuped.${ABI}" || \
-		die "Failed to create $PORTAGE_BUILDDIR/.setuped"
-
-	done
-
 	>> "$PORTAGE_BUILDDIR/.setuped" || \
 		die "Failed to create $PORTAGE_BUILDDIR/.setuped"
 	__ebuild_phase post_pkg_setup
-
 }
 
 __dyn_unpack() {
@@ -276,13 +268,17 @@ __dyn_unpack() {
 	fi
 	cd "${WORKDIR}" || die "Directory change failed: \`cd '${WORKDIR}'\`"
 	__ebuild_phase pre_src_unpack
-	__vecho ">>> Unpacking source$(_get_abi_string)..."
+	if [[ " ${FEATURES} " == *" force-multilib "* ]]; then
+		__vecho ">>> Unpacking source$(_get_abi_string)..."
+	else
+	__vecho ">>> Unpacking source..."
+	fi
 	__ebuild_phase src_unpack
 
 	>> "$PORTAGE_BUILDDIR/.unpacked" || \
 		die "Failed to create $PORTAGE_BUILDDIR/.unpacked"
 	__vecho ">>> Source unpacked in ${WORKDIR}"
-__ebuild_phase post_src_unpack
+	__ebuild_phase post_src_unpack
 }
 
 __dyn_clean() {
@@ -400,15 +396,6 @@ __dyn_prepare() {
 		return 0
 	fi
 
-	for LOOP_ABI in $(get_abi_list); do
-		if [[ " ${FEATURES} " == *" force-multilib "* ]]; then
-
-			if [ "${PORTAGE_BUILDDIR}"/.prepared.${LOOP_ABI} -nt "${WORKDIR}" ]; then
-				echo ">>> It appears that ${PN} is already prepared for ABI=${LOOP_ABI}; skipping."
-				echo ">>> Remove '$PORTAGE_BUILDDIR/.prepared.${LOOP_ABI}' to force prepare."
-				continue
-			fi
-		fi
 	if [[ -d $S ]] ; then
 		cd "${S}"
 	elif ___eapi_has_S_WORKDIR_fallback; then
@@ -422,10 +409,12 @@ __dyn_prepare() {
 	trap __abort_prepare SIGINT SIGQUIT
 
 	__ebuild_phase pre_src_prepare
-	__vecho ">>> Preparing source in $PWD$(_get_abi_string) ..."
+	if [[ " ${FEATURES} " == *" force-multilib "* ]]; then
+		__vecho ">>> Preparing source in $PWD$(_get_abi_string) ..."
+	else
+	__vecho ">>> Preparing source in $PWD ..."
+	fi
 	__ebuild_phase src_prepare
-
-	done
 
 	# keep path in eapply_user in sync!
 	if ___eapi_has_eapply_user && [[ ! -f ${T}/.portage_user_patches_applied ]]; then
@@ -448,15 +437,6 @@ __dyn_configure() {
 		return 0
 	fi
 
-	for LOOP_ABI in $(get_abi_list); do
-		if [[ " ${FEATURES} " == *" force-multilib "* ]]; then
-
-			if [ ${PORTAGE_BUILDDIR}/.configured.${LOOP_ABI} -nt "${WORKDIR}" ]; then
-				echo ">>> It appears that ${PN} is already configured for ABI=${LOOP_ABI}; skipping."
-				echo ">>> Remove '$PORTAGE_BUILDDIR/.configured.${LOOP_ABI}' to force configuration."
-				continue
-			fi
-		fi
 	if [[ -d $S ]] ; then
 		cd "${S}"
 	elif ___eapi_has_S_WORKDIR_fallback; then
@@ -471,10 +451,13 @@ __dyn_configure() {
 
 	__ebuild_phase pre_src_configure
 
-	__vecho ">>> Configuring source in $PWD$(_get_abi_string) ..."
+	if [[ " ${FEATURES} " == *" force-multilib "* ]]; then
+		__vecho ">>> Configuring source in $PWD$(_get_abi_string) ..."
+	else
+	__vecho ">>> Configuring source in $PWD ..."
+	fi
 	__ebuild_phase src_configure
 
-	done
 	>> "$PORTAGE_BUILDDIR/.configured" || \
 		die "Failed to create $PORTAGE_BUILDDIR/.configured"
 	__vecho ">>> Source configured."
@@ -492,15 +475,6 @@ __dyn_compile() {
 		return 0
 	fi
 
-	for LOOP_ABI in $(get_abi_list); do
-		if [[ " ${FEATURES} " == *" force-multilib "* ]]; then
-
-			if [ ${PORTAGE_BUILDDIR}/.compiled.${LOOP_ABI} -nt "${WORKDIR}" ]; then
-				echo ">>> It appears that ${PN} is already compiled for ABI=${LOOP_ABI}; skipping."
-				echo ">>> Remove '$PORTAGE_BUILDDIR/.compiled.${LOOP_ABI}' to force compilation."
-				continue
-			fi
-		fi
 	if [[ -d $S ]] ; then
 		cd "${S}"
 	elif ___eapi_has_S_WORKDIR_fallback; then
@@ -515,10 +489,12 @@ __dyn_compile() {
 
 	__ebuild_phase pre_src_compile
 
-	__vecho ">>> Compiling source in $PWD$(_get_abi_string) ..."
+	if [[ " ${FEATURES} " == *" force-multilib "* ]]; then
+		__vecho ">>> Compiling source in $PWD$(_get_abi_string) ..."
+	else
+	__vecho ">>> Compiling source in $PWD ..."
+	fi
 	__ebuild_phase src_compile
-
-	done
 	>> "$PORTAGE_BUILDDIR/.compiled" || \
 		die "Failed to create $PORTAGE_BUILDDIR/.compiled"
 	__vecho ">>> Source compiled."
@@ -633,7 +609,6 @@ __dyn_install() {
 	[[ " ${FEATURES} " == *" force-multilib "* ]] && is_auto-multilib && rm -rf "${D}".${ABI}
 	mkdir -p "${_x}"
 	unset _x
-	for LOOP_ABI in $(get_abi_list); do
 
 	if [[ -d $S ]] ; then
 		cd "${S}"
@@ -670,7 +645,6 @@ __dyn_install() {
 			_finalize_abi_install
 			cp "${T}"/environment "${PORTAGE_BUILDDIR}"/build-info/environment.${LOOP_ABI} || die
 		fi
-	done
 	if [[ -d "${D}" ]]; then
 		if [[ " ${FEATURES} " == *" force-multilib "* ]]; then
 			if [[ ${CATEGORY}/${PN} == sys-devel/libtool ]] ; then
