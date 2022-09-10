@@ -41,6 +41,7 @@ from portage.const import (
     PORTAGE_BASE_PATH,
     PRIVATE_PATH,
     PROFILE_PATH,
+    SUPPORTED_GENTOO_BINPKG_FORMATS,
     USER_CONFIG_PATH,
     USER_VIRTUALS_FILE,
 )
@@ -103,9 +104,6 @@ from portage.package.ebuild._config.VirtualsManager import VirtualsManager
 from portage.package.ebuild._config.helper import (
     ordered_by_atom_specificity,
     prune_incremental,
-)
-from portage.package.ebuild._config.unpack_dependencies import (
-    load_unpack_dependencies_configuration,
 )
 
 
@@ -202,7 +200,6 @@ class config:
     _deprecated_keys = {
         "PORTAGE_LOGDIR": "PORT_LOGDIR",
         "PORTAGE_LOGDIR_CLEAN": "PORT_LOGDIR_CLEAN",
-        "SIGNED_OFF_BY": "DCO_SIGNED_OFF_BY",
     }
 
     _setcpv_aux_keys = (
@@ -334,7 +331,6 @@ class config:
             self.profiles = clone.profiles
             self.packages = clone.packages
             self.repositories = clone.repositories
-            self.unpack_dependencies = clone.unpack_dependencies
             self._default_features_use = clone._default_features_use
             self._iuse_effective = clone._iuse_effective
             self._iuse_implicit_match = clone._iuse_implicit_match
@@ -728,10 +724,6 @@ class config:
                 if not isinstance(x, Atom):
                     x = Atom(x.lstrip("*"))
                 self.prevmaskdict.setdefault(x.cp, []).append(x)
-
-            self.unpack_dependencies = load_unpack_dependencies_configuration(
-                self.repositories
-            )
 
             mygcfg = {}
             if profiles_complex:
@@ -1518,6 +1510,15 @@ class config:
             if warning_shown and platform.python_implementation() == "PyPy":
                 writemsg(
                     _("!!! See https://bugs.pypy.org/issue833 for details.\n"),
+                    noiselevel=-1,
+                )
+
+        binpkg_format = self.get("BINPKG_FORMAT")
+        if binpkg_format:
+            if binpkg_format not in SUPPORTED_GENTOO_BINPKG_FORMATS:
+                writemsg(
+                    "!!! BINPKG_FORMAT contains invalid or "
+                    "unsupported format: %s" % binpkg_format,
                     noiselevel=-1,
                 )
 
@@ -3321,16 +3322,12 @@ class config:
             mydict.pop("EROOT", None)
             mydict.pop("ESYSROOT", None)
 
-        if (
-            phase
-            not in (
-                "pretend",
-                "setup",
-                "preinst",
-                "postinst",
-            )
-            or not eapi_exports_replace_vars(eapi)
-        ):
+        if phase not in (
+            "pretend",
+            "setup",
+            "preinst",
+            "postinst",
+        ) or not eapi_exports_replace_vars(eapi):
             mydict.pop("REPLACING_VERSIONS", None)
 
         if phase not in ("prerm", "postrm") or not eapi_exports_replace_vars(eapi):

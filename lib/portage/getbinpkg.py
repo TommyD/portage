@@ -21,10 +21,10 @@ import tempfile
 import base64
 import warnings
 
-_all_errors = [NotImplementedError, ValueError, socket.error]
-
 from html.parser import HTMLParser as html_parser_HTMLParser
 from urllib.parse import unquote as urllib_parse_unquote
+
+_all_errors = [NotImplementedError, ValueError, socket.error]
 
 try:
     import ftplib
@@ -47,7 +47,6 @@ _all_errors = tuple(_all_errors)
 
 
 def make_metadata_dict(data):
-
     warnings.warn(
         "portage.getbinpkg.make_metadata_dict() is deprecated",
         DeprecationWarning,
@@ -55,20 +54,24 @@ def make_metadata_dict(data):
     )
 
     myid, _myglob = data
-
-    mydict = {}
-    for k_bytes in portage.xpak.getindex_mem(myid):
-        k = _unicode_decode(
-            k_bytes, encoding=_encodings["repo.content"], errors="replace"
+    metadata = (
+        (
+            k_bytes,
+            _unicode_decode(
+                k_bytes, encoding=_encodings["repo.content"], errors="replace"
+            ),
         )
-        if k not in _all_metadata_keys and k != "CATEGORY":
-            continue
-        v = _unicode_decode(
+        for k_bytes in portage.xpak.getindex_mem(myid)
+    )
+    mydict = {
+        k: _unicode_decode(
             portage.xpak.getitem(data, k_bytes),
             encoding=_encodings["repo.content"],
             errors="replace",
         )
-        mydict[k] = v
+        for k_bytes, k in metadata
+        if k in _all_metadata_keys or k == "CATEGORY"
+    }
 
     return mydict
 
@@ -78,7 +81,6 @@ class ParseLinks(html_parser_HTMLParser):
     page and provide suffix and prefix limitors"""
 
     def __init__(self):
-
         warnings.warn(
             "portage.getbinpkg.ParseLinks is deprecated",
             DeprecationWarning,
@@ -92,19 +94,15 @@ class ParseLinks(html_parser_HTMLParser):
         return self.PL_anchors
 
     def get_anchors_by_prefix(self, prefix):
-        newlist = []
-        for x in self.PL_anchors:
-            if x.startswith(prefix):
-                if x not in newlist:
-                    newlist.append(x[:])
+        newlist = [
+            x for x in self.PL_anchors if x.startswith(prefix) and x not in newlist
+        ]
         return newlist
 
     def get_anchors_by_suffix(self, suffix):
-        newlist = []
-        for x in self.PL_anchors:
-            if x.endswith(suffix):
-                if x not in newlist:
-                    newlist.append(x[:])
+        newlist = [
+            x for x in self.PL_anchors if x.endswith(suffix) and x not in newlist
+        ]
         return newlist
 
     def handle_endtag(self, tag):
@@ -112,10 +110,12 @@ class ParseLinks(html_parser_HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         if tag == "a":
-            for x in attrs:
-                if x[0] == "href":
-                    if x[1] not in self.PL_anchors:
-                        self.PL_anchors.append(urllib_parse_unquote(x[1]))
+            myarchors = (
+                urllib_parse_unquote(x[1])
+                for x in attrs
+                if x[0] == "href" and x[1] not in self.PL_anchors
+            )
+            self.PL_anchors.extend(myarchors)
 
 
 def create_conn(baseurl, conn=None):
@@ -134,16 +134,13 @@ def create_conn(baseurl, conn=None):
         raise ValueError(
             _("Provided URI does not " "contain protocol identifier. '%s'") % baseurl
         )
-    protocol, url_parts = parts
+    protocol, url = parts
     del parts
 
-    url_parts = url_parts.split("/")
-    host = url_parts[0]
-    if len(url_parts) < 2:
-        address = "/"
-    else:
-        address = "/" + "/".join(url_parts[1:])
-    del url_parts
+    url_split = url.split("/", 1)
+    host = url_split[0]
+    address = f"/{url_split[1]}"
+    del url, url_split
 
     userpass_host = host.split("@", 1)
     if len(userpass_host) == 1:
@@ -154,13 +151,14 @@ def create_conn(baseurl, conn=None):
         userpass = userpass_host[0].split(":")
     del userpass_host
 
-    if len(userpass) > 2:
+    userpass_size = len(userpass)
+    if userpass_size > 2:
         raise ValueError(_("Unable to interpret username/password provided."))
-    elif len(userpass) == 2:
-        username = userpass[0]
+
+    username = userpass[0]
+    if userpass_size == 2:
         password = userpass[1]
-    elif len(userpass) == 1:
-        username = userpass[0]
+    elif userpass_size == 1:
         password = None
     del userpass
 
@@ -172,12 +170,10 @@ def create_conn(baseurl, conn=None):
         except AttributeError:
             # Python 2
             encodebytes = base64.encodestring
-        http_headers = {
-            b"Authorization": "Basic %s"
-            % encodebytes(_unicode_encode("%s:%s" % (username, password))).replace(
-                b"\012", b""
-            ),
-        }
+        unicode_bytes = encodebytes(_unicode_encode(f"{username}:{password}")).replace(
+            b"\012", b""
+        )
+        http_headers = {b"Authorization": f"Basic {unicode_bytes}"}
 
     if not conn:
         if protocol == "https":
@@ -204,9 +200,10 @@ def create_conn(baseurl, conn=None):
                 conn.login(username, password)
             else:
                 sys.stderr.write(
-                    colorize("WARN", _(" * No password provided for username"))
-                    + " '%s'" % (username,)
-                    + "\n\n"
+                    colorize(
+                        "WARN",
+                        _(f" * No password provided for username '{username}'\n\n"),
+                    )
                 )
                 conn.login(username)
             conn.set_pasv(passive)
@@ -238,22 +235,18 @@ def make_ftp_request(conn, address, rest=None, dest=None):
     )
 
     try:
-
         if dest:
             fstart_pos = dest.tell()
 
         conn.voidcmd("TYPE I")
         fsize = conn.size(address)
 
-        if (rest != None) and (rest < 0):
+        retr_address = f"RETR {address}"
+        if rest and rest < 0:
             rest = fsize + int(rest)
-        if rest < 0:
-            rest = 0
-
-        if rest != None:
-            mysocket = conn.transfercmd("RETR %s" % str(address), rest)
+            mysocket = conn.transfercmd(retr_address, rest)
         else:
-            mysocket = conn.transfercmd("RETR %s" % str(address))
+            mysocket = conn.transfercmd(retr_address)
 
         mydata = ""
         while 1:
@@ -262,14 +255,13 @@ def make_ftp_request(conn, address, rest=None, dest=None):
                 if dest:
                     dest.write(somedata)
                 else:
-                    mydata = mydata + somedata
+                    mydata = f"{mydata}{somedata}"
             else:
                 break
 
+        data_size = len(mydata)
         if dest:
             data_size = fstart_pos - dest.tell()
-        else:
-            data_size = len(mydata)
 
         mysocket.close()
         conn.voidresp()
@@ -294,7 +286,7 @@ def make_http_request(conn, address, _params={}, headers={}, dest=None):
 
     rc = 0
     response = None
-    while (rc == 0) or (rc == 301) or (rc == 302):
+    while rc in (0, 301, 302):
         try:
             if rc != 0:
                 conn = create_conn(address)[0]
@@ -302,38 +294,33 @@ def make_http_request(conn, address, _params={}, headers={}, dest=None):
         except SystemExit as e:
             raise
         except Exception as e:
-            return None, None, "Server request failed: %s" % str(e)
+            return None, None, f"Server request failed: {e}"
         response = conn.getresponse()
         rc = response.status
 
         # 301 means that the page address is wrong.
-        if (rc == 301) or (rc == 302):
-            ignored_data = response.read()
-            del ignored_data
+        if rc in (301, 302):
+            # This response reading is ignored on purpose.
+            _ = response.read()
             for x in str(response.msg).split("\n"):
                 parts = x.split(": ", 1)
                 if parts[0] == "Location":
                     if rc == 301:
                         sys.stderr.write(
-                            colorize("BAD", _("Location has moved: "))
-                            + str(parts[1])
-                            + "\n"
+                            f"{colorize('BAD', _('Location has moved: '))}{parts[1]}\n"
                         )
                     if rc == 302:
                         sys.stderr.write(
-                            colorize("BAD", _("Location has temporarily moved: "))
-                            + str(parts[1])
-                            + "\n"
+                            f"{colorize('BAD', _('Location has temporarily moved: '))}{parts[1]}\n"
                         )
                     address = parts[1]
                     break
 
-    if (rc != 200) and (rc != 206):
+    if rc not in (200, 206):
         return (
             None,
             rc,
-            "Server did not respond successfully (%s: %s)"
-            % (str(response.status), str(response.reason)),
+            f"Server did not respond successfully ({response.status}: {response.reason})",
         )
 
     if dest:
@@ -358,26 +345,28 @@ def match_in_array(array, prefix="", suffix="", match_both=1, allow_overlap=0):
 
     for x in array:
         add_p = 0
-        if prefix and (len(x) >= len(prefix)) and (x[: len(prefix)] == prefix):
+        x_size = len(x)
+        prefix_size = len(prefix)
+        if prefix and x_size >= prefix_size and x[:prefix_size] == prefix:
             add_p = 1
 
         if match_both:
             if prefix and not add_p:  # Require both, but don't have first one.
                 continue
-        else:
-            if add_p:  # Only need one, and we have it.
-                myarray.append(x[:])
-                continue
+        elif add_p:  # Only need one, and we have it.
+            myarray.append(x[:])
+            continue
 
+        suffix_size = len(suffix)
         if not allow_overlap:  # Not allow to overlap prefix and suffix
-            if len(x) >= (len(prefix) + len(suffix)):
+            if x_size >= (prefix_size + suffix_size):
                 pass
             else:
                 continue  # Too short to match.
         else:
             pass  # Do whatever... We're overlapping.
 
-        if suffix and (len(x) >= len(suffix)) and (x[-len(suffix) :] == suffix):
+        if suffix and x_size >= suffix_size and x[-len(suffix) :] == suffix:
             myarray.append(x)  # It matches
         else:
             continue  # Doesn't match.
@@ -396,9 +385,8 @@ def dir_get_list(baseurl, conn=None):
         stacklevel=2,
     )
 
-    if not conn:
-        keepconnection = 0
-    else:
+    keepconnection = 0
+    if conn:
         keepconnection = 1
 
     conn, protocol, address, params, headers = create_conn(baseurl, conn)
@@ -408,7 +396,7 @@ def dir_get_list(baseurl, conn=None):
         if not address.endswith("/"):
             # http servers can return a 400 error here
             # if the address doesn't end with a slash.
-            address += "/"
+            address = f"{address}/"
         page, rc, msg = make_http_request(conn, address, params, headers)
 
         if page:
@@ -422,7 +410,7 @@ def dir_get_list(baseurl, conn=None):
             raise portage.exception.PortageException(
                 _("Unable to get listing: %s %s") % (rc, msg)
             )
-    elif protocol in ["ftp"]:
+    elif protocol == "ftp":
         if address[-1] == "/":
             olddir = conn.pwd()
             conn.cwd(address)
@@ -453,15 +441,14 @@ def file_get_metadata(baseurl, conn=None, chunk_size=3000):
         stacklevel=2,
     )
 
-    if not conn:
+    keepconnection = 1
+    if conn:
         keepconnection = 0
-    else:
-        keepconnection = 1
 
     conn, protocol, address, params, headers = create_conn(baseurl, conn)
 
     if protocol in ["http", "https"]:
-        headers["Range"] = "bytes=-%s" % str(chunk_size)
+        headers["Range"] = f"bytes=-{chunk_size}"
         data, _x, _x = make_http_request(conn, address, params, headers)
     elif protocol in ["ftp"]:
         data, _x, _x = make_ftp_request(conn, address, -chunk_size)
@@ -473,7 +460,7 @@ def file_get_metadata(baseurl, conn=None, chunk_size=3000):
         finally:
             f.close()
     else:
-        raise TypeError(_("Unknown protocol. '%s'") % protocol)
+        raise TypeError(_(f"Unknown protocol. '{protocol}'"))
 
     if data:
         xpaksize = portage.xpak.decodeint(data[-8:-4])
@@ -523,27 +510,26 @@ def file_get(
     if "DISTDIR" not in variables:
         if dest is None:
             raise portage.exception.MissingParameter(
-                _("%s is missing required '%s' key") % ("fcmd_vars", "DISTDIR")
+                _("fcmd_vars is missing required 'DISTDIR' key")
             )
         variables["DISTDIR"] = dest
 
     if "URI" not in variables:
         if baseurl is None:
             raise portage.exception.MissingParameter(
-                _("%s is missing required '%s' key") % ("fcmd_vars", "URI")
+                _("fcmd_vars is missing required 'URI' key")
             )
         variables["URI"] = baseurl
 
     if "FILE" not in variables:
-        if filename is None:
+        if not filename:
             filename = os.path.basename(variables["URI"])
         variables["FILE"] = filename
 
     from portage.util import varexpand
     from portage.process import spawn
 
-    myfetch = portage.util.shlex_split(fcmd)
-    myfetch = [varexpand(x, mydict=variables) for x in myfetch]
+    myfetch = (varexpand(x, mydict=variables) for x in portage.util.shlex_split(fcmd))
     fd_pipes = {
         0: portage._get_stdin().fileno(),
         1: sys.__stdout__.fileno(),
@@ -569,14 +555,13 @@ def file_get_lib(baseurl, dest, conn=None):
         stacklevel=2,
     )
 
-    if not conn:
-        keepconnection = 0
-    else:
+    keepconnection = 0
+    if conn:
         keepconnection = 1
 
     conn, protocol, address, params, headers = create_conn(baseurl, conn)
 
-    sys.stderr.write("Fetching '" + str(os.path.basename(address)) + "'\n")
+    sys.stderr.write(f"Fetching '{os.path.basename(address)}'\n")
     if protocol in ["http", "https"]:
         data, rc, _msg = make_http_request(conn, address, params, headers, dest=dest)
     elif protocol in ["ftp"]:
@@ -612,22 +597,20 @@ def file_get_lib(baseurl, dest, conn=None):
 def dir_get_metadata(
     baseurl, conn=None, chunk_size=3000, verbose=1, usingcache=1, makepickle=None
 ):
-
     warnings.warn(
         "portage.getbinpkg.dir_get_metadata() is deprecated",
         DeprecationWarning,
         stacklevel=2,
     )
 
-    if not conn:
+    keepconnection = 1
+    if conn:
         keepconnection = 0
-    else:
-        keepconnection = 1
 
     cache_path = "/var/cache/edb"
     metadatafilename = os.path.join(cache_path, "remote_metadata.pickle")
 
-    if makepickle is None:
+    if not makepickle:
         makepickle = "/var/cache/edb/metadata.idx.most_recent"
 
     try:
@@ -673,7 +656,7 @@ def dir_get_metadata(
 
     if not os.access(cache_path, os.W_OK):
         sys.stderr.write(_("!!! Unable to write binary metadata to disk!\n"))
-        sys.stderr.write(_("!!! Permission denied: '%s'\n") % cache_path)
+        sys.stderr.write(_(f"!!! Permission denied: '{cache_path}'\n"))
         return metadata[baseurl]["data"]
 
     import portage.exception
@@ -681,10 +664,8 @@ def dir_get_metadata(
     try:
         filelist = dir_get_list(baseurl, conn)
     except portage.exception.PortageException as e:
-        sys.stderr.write(
-            _("!!! Error connecting to '%s'.\n") % _hide_url_passwd(baseurl)
-        )
-        sys.stderr.write("!!! %s\n" % str(e))
+        sys.stderr.write(_(f"!!! Error connecting to '{_hide_url_passwd(baseurl)}'.\n"))
+        sys.stderr.write(f"!!! {e}\n")
         del e
         return metadata[baseurl]["data"]
     tbz2list = match_in_array(filelist, suffix=".tbz2")
@@ -743,10 +724,8 @@ def dir_get_metadata(
                 except SystemExit as e:
                     raise
                 except Exception as e:
-                    sys.stderr.write(
-                        _("!!! Failed to read data from index: ") + str(mfile) + "\n"
-                    )
-                    sys.stderr.write("!!! %s" % str(e))
+                    sys.stderr.write(f"!!! Failed to read data from index: {mfile}\n")
+                    sys.stderr.write(f"!!! {e}")
                     sys.stderr.flush()
             try:
                 metadatafile = open(
@@ -761,7 +740,7 @@ def dir_get_metadata(
                 raise
             except Exception as e:
                 sys.stderr.write(_("!!! Failed to write binary metadata to disk!\n"))
-                sys.stderr.write("!!! %s\n" % str(e))
+                sys.stderr.write(f"!!! {e}\n")
                 sys.stderr.flush()
             break
     # We may have metadata... now we run through the tbz2 list and check.
@@ -784,10 +763,14 @@ def dir_get_metadata(
 
         def display(self):
             self.out.write(
-                "\r"
-                + colorize("WARN", _("cache miss: '") + str(self.misses) + "'")
-                + " --- "
-                + colorize("GOOD", _("cache hit: '") + str(self.hits) + "'")
+                "".join(
+                    (
+                        "\r",
+                        colorize("WARN", _(f"cache miss: '{self.misses}'")),
+                        " --- ",
+                        colorize("GOOD", _(f"cache hit: '{self.hits}'")),
+                    )
+                )
             )
             self.out.flush()
 
@@ -829,9 +812,7 @@ def dir_get_metadata(
                 metadata[baseurl]["data"][x] = make_metadata_dict(myid)
             elif verbose:
                 sys.stderr.write(
-                    colorize("BAD", _("!!! Failed to retrieve metadata on: "))
-                    + str(x)
-                    + "\n"
+                    f"{colorize('BAD', _('!!! Failed to retrieve metadata on: '))}{x}\n"
                 )
                 sys.stderr.flush()
         else:
@@ -902,7 +883,7 @@ class PackageIndex:
     ):
 
         self._pkg_slot_dict = None
-        if allowed_pkg_keys is not None:
+        if allowed_pkg_keys:
             self._pkg_slot_dict = slot_dict_class(allowed_pkg_keys)
 
         self._default_header_data = default_header_data
@@ -920,11 +901,9 @@ class PackageIndex:
         self.modified = True
 
     def _readpkgindex(self, pkgfile, pkg_entry=True):
-
+        d = {}
         allowed_keys = None
-        if self._pkg_slot_dict is None or not pkg_entry:
-            d = {}
-        else:
+        if self._pkg_slot_dict and pkg_entry:
             d = self._pkg_slot_dict()
             allowed_keys = d.allowed_keys
 
@@ -946,7 +925,7 @@ class PackageIndex:
 
     def _writepkgindex(self, pkgfile, items):
         for k, v in items:
-            pkgfile.write("%s: %s\n" % (self._write_translation_map.get(k, k), v))
+            pkgfile.write(f"{self._write_translation_map.get(k, k)}: {v}\n")
         pkgfile.write("\n")
 
     def read(self, pkgfile):
@@ -970,7 +949,7 @@ class PackageIndex:
             if self._inherited_keys:
                 for k in self._inherited_keys:
                     v = self.header.get(k)
-                    if v is not None:
+                    if v:
                         d.setdefault(k, v)
             self.packages.append(d)
 
@@ -988,7 +967,7 @@ class PackageIndex:
             if self._inherited_keys:
                 for k in self._inherited_keys:
                     v = self.header.get(k)
-                    if v is not None and v == metadata.get(k):
+                    if v and v == metadata.get(k):
                         del metadata[k]
             if self._default_pkg_data:
                 for k, v in self._default_pkg_data.items():
@@ -997,5 +976,5 @@ class PackageIndex:
             keys = list(metadata)
             keys.sort()
             self._writepkgindex(
-                pkgfile, [(k, metadata[k]) for k in keys if metadata[k]]
+                pkgfile, ((k, metadata[k]) for k in keys if metadata[k])
             )
