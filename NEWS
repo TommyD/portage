@@ -1,3 +1,60 @@
+portage-3.0.33 (2022-07-18)
+--------------
+
+Bug fixes:
+* env-update: Handle BROOT vs ROOT distinction for PATH (and other
+  variables like PREROOTPATH and ROOTPATH). The issue being that
+  only some variables are relevant for execution (and hence need
+  to be derived from BROOT), while others need to correspond to
+  EROOT for e.g. library paths. This should help with Clang
+  stage building.
+
+* Build: Fix test suite file data processing (copying of .gnupg data
+  for the gpkg tests led to a failure in src_test in the portage ebuild).
+
+* emerge: drop obsolete fixpackages warning (as a result of refactoring,
+  started to show on every emerge, but is harmless and left over
+  from many years ago). Bug #858407.
+
+* quickpkg: Fix quoting/splitting of BINPKG_COMPRESS_FLAGS arguments. Bug #857933.
+
+* estrip: fix double prefix (regression from "don't call estrip twice" fix
+  in 3.0.31). Bug #858818.
+
+* ebuild(5): dolib, libopts: mention dolib, libopts being banned in EAPI 7.
+
+* ebuild(5): dohtml: mention dohtml is banned in EAPI 7.
+
+* ebuild(5): hasv: mention hasv is banned in EAPI 8.
+
+* ebuild(5): dosym: mention dosym -r for EAPI 8.
+
+* ebuild(5): einstall: mention einstall was banned in EAPI 6.
+
+* ebuild(5): econf: add --docdir and --htmldir for EAPI 6,
+  add --with-sysroot for EAPI 7, add --datarootdir and --disable-static for EAPI
+  8.
+
+* ebuild(5): econf: drop --disable-dependency-tracking from "example"
+  because it's confusing (implies it was always added, even before EAPI 4).
+
+* ebuild(5): modernize examples slightly.
+
+portage-3.0.32 (2022-07-11)
+--------------
+
+Bug fixes:
+* Fix marking all news items as relevant. See bug #857669.
+
+* Allow nested ebegin again while there's a lack of consensus on banning it.
+
+* Fix use of deprecated (now removed) getchildren() call in XML parser,
+  which caused failures with gentoolkit. See bug #857537. (Note that this
+  was not originally in the release notes for 3.0.32, but the fix was in
+  3.0.32).
+
+* Fix doc generation by removing reference to removed EAPIs. See bug #857486.
+
 portage-3.0.31 (2022-07-10)
 --------------
 
