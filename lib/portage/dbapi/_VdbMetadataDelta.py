@@ -2,7 +2,6 @@
 # Distributed under the terms of the GNU General Public License v2
 
 import errno
-import io
 import json
 import os
 
@@ -39,14 +38,13 @@ class VdbMetadataDelta:
             return None
 
         try:
-            with io.open(
+            with open(
                 self._vardb._cache_delta_filename,
-                "r",
                 encoding=_encodings["repo.content"],
                 errors="strict",
             ) as f:
                 cache_obj = json.load(f)
-        except EnvironmentError as e:
+        except OSError as e:
             if e.errno not in (errno.ENOENT, errno.ESTALE):
                 raise
         except (SystemExit, KeyboardInterrupt):

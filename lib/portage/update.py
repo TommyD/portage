@@ -2,7 +2,6 @@
 # Distributed under the terms of the GNU General Public License v2
 
 import errno
-import io
 import re
 import stat
 import sys
@@ -157,9 +156,8 @@ def fixdbentries(update_iter, dbdir, eapi=None, parent=None):
     mydata = {}
     for myfile in [f for f in os.listdir(dbdir) if f not in ignored_dbentries]:
         file_path = os.path.join(dbdir, myfile)
-        with io.open(
+        with open(
             _unicode_encode(file_path, encoding=_encodings["fs"], errors="strict"),
-            mode="r",
             encoding=_encodings["repo.content"],
             errors="replace",
         ) as f:
@@ -200,9 +198,8 @@ def grab_updates(updpath, prev_mtimes=None):
         if not stat.S_ISREG(mystat.st_mode):
             continue
         if int(prev_mtimes.get(file_path, -1)) != mystat[stat.ST_MTIME]:
-            f = io.open(
+            f = open(
                 _unicode_encode(file_path, encoding=_encodings["fs"], errors="strict"),
-                mode="r",
                 encoding=_encodings["repo.content"],
                 errors="replace",
             )
@@ -382,18 +379,17 @@ def update_config_files(
     for x in myxfiles:
         f = None
         try:
-            f = io.open(
+            f = open(
                 _unicode_encode(
                     os.path.join(abs_user_config, x),
                     encoding=_encodings["fs"],
                     errors="strict",
                 ),
-                mode="r",
                 encoding=_encodings["content"],
                 errors="replace",
             )
             file_contents[x] = f.readlines()
-        except IOError:
+        except OSError:
             continue
         finally:
             if f is not None:
@@ -428,12 +424,14 @@ def update_config_files(
                         if match_callback(repo_name, atom, new_atom):
                             # add a comment with the update command, so
                             # the user can clearly see what happened
-                            contents[pos] = "# %s\n" % " ".join(
-                                "%s" % (x,) for x in update_cmd
+                            contents[pos] = "# {}\n".format(
+                                " ".join("{}".format(x) for x in update_cmd)
                             )
                             contents.insert(
                                 pos + 1,
-                                line.replace("%s" % (atom,), "%s" % (new_atom,), 1),
+                                line.replace(
+                                    "{}".format(atom), "{}".format(new_atom), 1
+                                ),
                             )
                             # we've inserted an additional line, so we need to
                             # skip it when it's reached in the next iteration

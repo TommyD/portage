@@ -10,7 +10,6 @@ import xml.dom.minidom
 
 from functools import reduce
 
-import io
 from io import StringIO
 
 from portage import _encodings, _unicode_decode, _unicode_encode
@@ -778,7 +777,7 @@ class Glsa:
         @return:	None
         """
         if not self.isInjected():
-            checkfile = io.open(
+            checkfile = open(
                 _unicode_encode(
                     os.path.join(self.config["EROOT"], PRIVATE_PATH, "glsa_injected"),
                     encoding=_encodings["fs"],
@@ -804,11 +803,11 @@ class Glsa:
         @return:	list of package-versions that have to be merged
         """
         return list(
-            set(
+            {
                 update
                 for (vuln, update) in self.getAffectionTable(least_change)
                 if update
-            )
+            }
         )
 
     def getAffectionTable(self, least_change=True):

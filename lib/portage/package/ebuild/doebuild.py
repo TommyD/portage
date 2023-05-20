@@ -7,7 +7,6 @@ import grp
 import gzip
 import errno
 import fnmatch
-import io
 from itertools import chain
 import logging
 import os as _os
@@ -228,7 +227,7 @@ def _doebuild_spawn(phase, settings, actionmap=None, **kwargs):
         else:
             ebuild_sh_arg = phase
 
-        cmd = "%s %s" % (
+        cmd = "{} {}".format(
             _shell_quote(
                 os.path.join(
                     settings["PORTAGE_BIN_PATH"], os.path.basename(EBUILD_SH_BINARY)
@@ -903,7 +902,7 @@ def doebuild(
 
     if mydo not in clean_phases and not os.path.exists(myebuild):
         writemsg(
-            "!!! doebuild: %s not found for %s\n" % (myebuild, mydo), noiselevel=-1
+            "!!! doebuild: {} not found for {}\n".format(myebuild, mydo), noiselevel=-1
         )
         return 1
 
@@ -1247,12 +1246,14 @@ def doebuild(
             else:
                 vardb = vartree.dbapi
                 cpv = mysettings.mycpv
-                cpv_slot = "%s%s%s" % (cpv.cp, portage.dep._slot_separator, cpv.slot)
+                cpv_slot = "{}{}{}".format(
+                    cpv.cp, portage.dep._slot_separator, cpv.slot
+                )
                 mysettings["REPLACING_VERSIONS"] = " ".join(
-                    set(
+                    {
                         portage.versions.cpv_getversion(match)
                         for match in vardb.match(cpv_slot) + vardb.match("=" + cpv)
-                    )
+                    }
                 )
 
         # if any of these are being called, handle them -- running them out of
@@ -1495,7 +1496,7 @@ def doebuild(
                         if pkg.build_id is not None:
                             build_info["BUILD_ID"] = "%s\n" % pkg.build_id
                         for k, v in build_info.items():
-                            with io.open(
+                            with open(
                                 _unicode_encode(
                                     os.path.join(infoloc, k),
                                     encoding=_encodings["fs"],
@@ -1808,7 +1809,7 @@ def _spawn_actionmap(settings):
 
 def _validate_deps(mysettings, myroot, mydo, mydbapi):
 
-    invalid_dep_exempt_phases = set(["clean", "cleanrm", "help", "prerm", "postrm"])
+    invalid_dep_exempt_phases = {"clean", "cleanrm", "help", "prerm", "postrm"}
     all_keys = set(Package.metadata_keys)
     all_keys.add("SRC_URI")
     all_keys = tuple(all_keys)
@@ -1848,7 +1849,7 @@ def _validate_deps(mysettings, myroot, mydo, mydbapi):
     if pkg.invalid:
         for k, v in pkg.invalid.items():
             for msg in v:
-                msgs.append("  %s\n" % (msg,))
+                msgs.append("  {}\n".format(msg))
 
     if msgs:
         portage.util.writemsg_level(
@@ -2093,7 +2094,7 @@ def spawn(
     if mysettings.mycpv is not None:
         keywords["opt_name"] = "[%s]" % mysettings.mycpv
     else:
-        keywords["opt_name"] = "[%s/%s]" % (
+        keywords["opt_name"] = "[{}/{}]".format(
             mysettings.get("CATEGORY", ""),
             mysettings.get("PF", ""),
         )
@@ -2286,7 +2287,7 @@ def _check_build_log(mysettings, out=None):
             _unicode_encode(logfile, encoding=_encodings["fs"], errors="strict"),
             mode="rb",
         )
-    except EnvironmentError:
+    except OSError:
         return
 
     f_real = None
@@ -2310,7 +2311,7 @@ def _check_build_log(mysettings, out=None):
 
     qa_configure_opts = ""
     try:
-        with io.open(
+        with open(
             _unicode_encode(
                 os.path.join(
                     mysettings["PORTAGE_BUILDDIR"], "build-info", "QA_CONFIGURE_OPTIONS"
@@ -2318,12 +2319,11 @@ def _check_build_log(mysettings, out=None):
                 encoding=_encodings["fs"],
                 errors="strict",
             ),
-            mode="r",
             encoding=_encodings["repo.content"],
             errors="replace",
         ) as qa_configure_opts_f:
             qa_configure_opts = qa_configure_opts_f.read()
-    except IOError as e:
+    except OSError as e:
         if e.errno not in (errno.ENOENT, errno.ESTALE):
             raise
 
@@ -2338,7 +2338,7 @@ def _check_build_log(mysettings, out=None):
 
     qa_am_maintainer_mode = []
     try:
-        with io.open(
+        with open(
             _unicode_encode(
                 os.path.join(
                     mysettings["PORTAGE_BUILDDIR"],
@@ -2348,14 +2348,13 @@ def _check_build_log(mysettings, out=None):
                 encoding=_encodings["fs"],
                 errors="strict",
             ),
-            mode="r",
             encoding=_encodings["repo.content"],
             errors="replace",
         ) as qa_am_maintainer_mode_f:
             qa_am_maintainer_mode = [
                 x for x in qa_am_maintainer_mode_f.read().splitlines() if x
             ]
-    except IOError as e:
+    except OSError as e:
         if e.errno not in (errno.ENOENT, errno.ESTALE):
             raise
 
@@ -2435,7 +2434,7 @@ def _check_build_log(mysettings, out=None):
     except (EOFError, zlib.error) as e:
         _eerror(
             [
-                "portage encountered a zlib error: '%s'" % (e,),
+                "portage encountered a zlib error: '{}'".format(e),
                 "while reading the log file: '%s'" % logfile,
             ]
         )
@@ -2536,7 +2535,7 @@ def _post_src_install_write_metadata(settings):
         if v is not None:
             write_atomic(os.path.join(build_info_dir, k), v + "\n")
 
-    with io.open(
+    with open(
         _unicode_encode(
             os.path.join(build_info_dir, "BUILD_TIME"),
             encoding=_encodings["fs"],
@@ -2546,7 +2545,7 @@ def _post_src_install_write_metadata(settings):
         encoding=_encodings["repo.content"],
         errors="strict",
     ) as f:
-        f.write("%.0f\n" % (time.time(),))
+        f.write("{:.0f}\n".format(time.time()))
 
     use = frozenset(settings["PORTAGE_USE"].split())
     for k in _vdb_use_conditional_keys:
@@ -2574,7 +2573,7 @@ def _post_src_install_write_metadata(settings):
             except OSError:
                 pass
             continue
-        with io.open(
+        with open(
             _unicode_encode(
                 os.path.join(build_info_dir, k),
                 encoding=_encodings["fs"],
@@ -2596,7 +2595,7 @@ def _post_src_install_write_metadata(settings):
                 except OSError:
                     pass
                 continue
-            with io.open(
+            with open(
                 _unicode_encode(
                     os.path.join(build_info_dir, k),
                     encoding=_encodings["fs"],
@@ -2670,7 +2669,7 @@ def _post_src_install_uid_fix(mysettings, out):
 
     qa_desktop_file = ""
     try:
-        with io.open(
+        with open(
             _unicode_encode(
                 os.path.join(
                     mysettings["PORTAGE_BUILDDIR"], "build-info", "QA_DESKTOP_FILE"
@@ -2678,12 +2677,11 @@ def _post_src_install_uid_fix(mysettings, out):
                 encoding=_encodings["fs"],
                 errors="strict",
             ),
-            mode="r",
             encoding=_encodings["repo.content"],
             errors="replace",
         ) as f:
             qa_desktop_file = f.read()
-    except IOError as e:
+    except OSError as e:
         if e.errno not in (errno.ENOENT, errno.ESTALE):
             raise
 
@@ -2794,7 +2792,7 @@ def _post_src_install_uid_fix(mysettings, out):
                             "   %s is not a valid libtool archive, skipping\n"
                             % fpath[len(destdir) :]
                         )
-                        qa_msg = "QA Notice: invalid .la file found: %s, %s" % (
+                        qa_msg = "QA Notice: invalid .la file found: {}, {}".format(
                             fpath[len(destdir) :],
                             e,
                         )
@@ -2856,7 +2854,7 @@ def _post_src_install_uid_fix(mysettings, out):
 
     build_info_dir = os.path.join(mysettings["PORTAGE_BUILDDIR"], "build-info")
 
-    f = io.open(
+    f = open(
         _unicode_encode(
             os.path.join(build_info_dir, "SIZE"),
             encoding=_encodings["fs"],
@@ -2908,16 +2906,15 @@ def _post_src_install_soname_symlinks(mysettings, out):
 
     f = None
     try:
-        f = io.open(
+        f = open(
             _unicode_encode(
                 needed_filename, encoding=_encodings["fs"], errors="strict"
             ),
-            mode="r",
             encoding=_encodings["repo.content"],
             errors="replace",
         )
         lines = f.readlines()
-    except IOError as e:
+    except OSError as e:
         if e.errno not in (errno.ENOENT, errno.ESTALE):
             raise
         return
@@ -2928,18 +2925,17 @@ def _post_src_install_soname_symlinks(mysettings, out):
     metadata = {}
     for k in ("QA_PREBUILT", "QA_SONAME_NO_SYMLINK"):
         try:
-            with io.open(
+            with open(
                 _unicode_encode(
                     os.path.join(mysettings["PORTAGE_BUILDDIR"], "build-info", k),
                     encoding=_encodings["fs"],
                     errors="strict",
                 ),
-                mode="r",
                 encoding=_encodings["repo.content"],
                 errors="replace",
             ) as f:
                 v = f.read()
-        except IOError as e:
+        except OSError as e:
             if e.errno not in (errno.ENOENT, errno.ESTALE):
                 raise
         else:
@@ -3000,35 +2996,33 @@ def _post_src_install_soname_symlinks(mysettings, out):
 
     build_info_dir = os.path.join(mysettings["PORTAGE_BUILDDIR"], "build-info")
     try:
-        with io.open(
+        with open(
             _unicode_encode(
                 os.path.join(build_info_dir, "PROVIDES_EXCLUDE"),
                 encoding=_encodings["fs"],
                 errors="strict",
             ),
-            mode="r",
             encoding=_encodings["repo.content"],
             errors="replace",
         ) as f:
             provides_exclude = f.read()
-    except IOError as e:
+    except OSError as e:
         if e.errno not in (errno.ENOENT, errno.ESTALE):
             raise
         provides_exclude = ""
 
     try:
-        with io.open(
+        with open(
             _unicode_encode(
                 os.path.join(build_info_dir, "REQUIRES_EXCLUDE"),
                 encoding=_encodings["fs"],
                 errors="strict",
             ),
-            mode="r",
             encoding=_encodings["repo.content"],
             errors="replace",
         ) as f:
             requires_exclude = f.read()
-    except IOError as e:
+    except OSError as e:
         if e.errno not in (errno.ENOENT, errno.ESTALE):
             raise
         requires_exclude = ""
@@ -3051,7 +3045,7 @@ def _post_src_install_soname_symlinks(mysettings, out):
             entry = NeededEntry.parse(needed_filename, l)
         except InvalidData as e:
             portage.util.writemsg_level(
-                "\n%s\n\n" % (e,), level=logging.ERROR, noiselevel=-1
+                "\n{}\n\n".format(e), level=logging.ERROR, noiselevel=-1
             )
             continue
 
@@ -3105,7 +3099,7 @@ def _post_src_install_soname_symlinks(mysettings, out):
     needed_file.close()
 
     if soname_deps.requires is not None:
-        with io.open(
+        with open(
             _unicode_encode(
                 os.path.join(build_info_dir, "REQUIRES"),
                 encoding=_encodings["fs"],
@@ -3118,7 +3112,7 @@ def _post_src_install_soname_symlinks(mysettings, out):
             f.write(soname_deps.requires)
 
     if soname_deps.provides is not None:
-        with io.open(
+        with open(
             _unicode_encode(
                 os.path.join(build_info_dir, "PROVIDES"),
                 encoding=_encodings["fs"],

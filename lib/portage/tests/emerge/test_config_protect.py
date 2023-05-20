@@ -1,7 +1,6 @@
 # Copyright 2014-2015 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-import io
 from functools import partial
 import shutil
 import stat
@@ -129,7 +128,7 @@ src_install() {
                 path = os.path.join(dir_path, name)
                 st = os.lstat(path)
                 if stat.S_ISREG(st.st_mode):
-                    with io.open(path, mode="a", encoding=_encodings["stdio"]) as f:
+                    with open(path, mode="a", encoding=_encodings["stdio"]) as f:
                         f.write("modified at %d\n" % time.time())
                 elif stat.S_ISLNK(st.st_mode):
                     old_dest = os.readlink(path)
@@ -288,7 +287,7 @@ src_install() {
                             sys.stderr.write(_unicode_decode(line))
 
                 self.assertEqual(
-                    os.EX_OK, proc.returncode, "emerge failed with args %s" % (args,)
+                    os.EX_OK, proc.returncode, "emerge failed with args {}".format(args)
                 )
         finally:
             playground.cleanup()

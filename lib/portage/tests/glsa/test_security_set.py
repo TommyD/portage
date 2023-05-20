@@ -1,7 +1,6 @@
 # Copyright 2013-2014 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-import io
 
 import portage
 from portage import os, _encodings
@@ -128,7 +127,7 @@ class SecuritySetTestCase(TestCase):
             )
             portage.util.ensure_dirs(glsa_dir)
             for glsa in glsas:
-                with io.open(
+                with open(
                     os.path.join(glsa_dir, "glsa-" + glsa["glsa_id"] + ".xml"),
                     encoding=_encodings["repo.content"],
                     mode="w",

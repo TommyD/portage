@@ -3,7 +3,6 @@
 # Distributed under the terms of the GNU General Public License v2
 
 import errno
-import io
 import time
 import portage
 from portage import os
@@ -41,13 +40,13 @@ def process(mysettings, key, logentries, fulltext):
     # TODO: Locking
     elogfilename = elogdir + "/summary.log"
     try:
-        elogfile = io.open(
+        elogfile = open(
             _unicode_encode(elogfilename, encoding=_encodings["fs"], errors="strict"),
             mode="a",
             encoding=_encodings["content"],
             errors="backslashreplace",
         )
-    except IOError as e:
+    except OSError as e:
         func_call = "open('%s', 'a')" % elogfilename
         if e.errno == errno.EACCES:
             raise portage.exception.PermissionDenied(func_call)

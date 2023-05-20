@@ -3,7 +3,6 @@
 # Distributed under the terms of the GNU General Public License v2
 
 import errno
-import io
 import time
 import portage
 from portage import os
@@ -57,14 +56,14 @@ def process(mysettings, key, logentries, fulltext):
     _ensure_log_subdirs(logdir, log_subdir)
 
     try:
-        with io.open(
+        with open(
             _unicode_encode(elogfilename, encoding=_encodings["fs"], errors="strict"),
             mode="w",
             encoding=_encodings["content"],
             errors="backslashreplace",
         ) as elogfile:
             elogfile.write(_unicode_decode(fulltext))
-    except IOError as e:
+    except OSError as e:
         func_call = "open('%s', 'w')" % elogfilename
         if e.errno == errno.EACCES:
             raise portage.exception.PermissionDenied(func_call)

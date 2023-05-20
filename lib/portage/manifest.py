@@ -2,7 +2,6 @@
 # Distributed under the terms of the GNU General Public License v2
 
 import errno
-import io
 import itertools
 import logging
 import re
@@ -221,9 +220,8 @@ class Manifest:
         """Parse a manifest.  If myhashdict is given then data will be added too it.
         Otherwise, a new dict will be created and returned."""
         try:
-            with io.open(
+            with open(
                 _unicode_encode(file_path, encoding=_encodings["fs"], errors="strict"),
-                mode="r",
                 encoding=_encodings["repo.content"],
                 errors="replace",
             ) as f:
@@ -231,7 +229,7 @@ class Manifest:
                     myhashdict = {}
                 self._parseDigests(f, myhashdict=myhashdict, **kwargs)
             return myhashdict
-        except (OSError, IOError) as e:
+        except OSError as e:
             if e.errno == errno.ENOENT:
                 raise FileNotFound(file_path)
             else:
@@ -322,13 +320,12 @@ class Manifest:
             preserved_stats = {self.pkgdir.rstrip(os.sep): os.stat(self.pkgdir)}
             if myentries and not force:
                 try:
-                    with io.open(
+                    with open(
                         _unicode_encode(
                             self.getFullname(),
                             encoding=_encodings["fs"],
                             errors="strict",
                         ),
-                        mode="r",
                         encoding=_encodings["repo.content"],
                         errors="replace",
                     ) as f:
@@ -340,7 +337,7 @@ class Manifest:
                                 if oldentry != myentry:
                                     update_manifest = True
                                     break
-                except (IOError, OSError) as e:
+                except OSError as e:
                     if e.errno == errno.ENOENT:
                         pass
                     else:
@@ -370,7 +367,7 @@ class Manifest:
 
             if sign:
                 self.sign()
-        except (IOError, OSError) as e:
+        except OSError as e:
             if e.errno == errno.EACCES:
                 raise PermissionDenied(str(e))
             raise
@@ -539,9 +536,9 @@ class Manifest:
             os.path.basename(self.pkgdir.rstrip(os.path.sep)),
             self.pkgdir,
         )
-        distlist = set(
+        distlist = {
             distfile for cpv in cpvlist for distfile in self._getCpvDistfiles(cpv)
-        )
+        }
 
         if requiredDistfiles is None:
             # This allows us to force removal of stale digests for the
@@ -796,9 +793,8 @@ class Manifest:
         mfname = self.getFullname()
         if not os.path.exists(mfname):
             return []
-        with io.open(
+        with open(
             _unicode_encode(mfname, encoding=_encodings["fs"], errors="strict"),
-            mode="r",
             encoding=_encodings["repo.content"],
             errors="replace",
         ) as myfile:

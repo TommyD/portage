@@ -2,7 +2,6 @@
 # Copyright 2006-2020 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
-import sys
 
 import portage
 
@@ -59,7 +58,7 @@ def _combine_logentries(logentries):
         for msgtype, msgcontent in logentries[phase]:
             if previous_type != msgtype:
                 previous_type = msgtype
-                rValue.append("%s: %s" % (msgtype, phase))
+                rValue.append("{}: {}".format(msgtype, phase))
             if isinstance(msgcontent, str):
                 rValue.append(msgcontent.rstrip("\n"))
             else:

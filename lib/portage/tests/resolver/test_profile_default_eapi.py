@@ -1,7 +1,6 @@
 # Copyright 2014 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
-import io
 
 from portage import os, _encodings
 from portage.const import USER_CONFIG_PATH
@@ -108,7 +107,7 @@ class ProfileDefaultEAPITestCase(TestCase):
             for prof_path, data in profile_info:
                 ensure_dirs(prof_path)
                 for k, v in data.items():
-                    with io.open(
+                    with open(
                         os.path.join(prof_path, k),
                         mode="w",
                         encoding=_encodings["repo.content"],

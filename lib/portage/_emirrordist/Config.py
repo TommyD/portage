@@ -2,7 +2,6 @@
 # Distributed under the terms of the GNU General Public License v2
 
 import copy
-import io
 import logging
 import shelve
 import time
@@ -97,7 +96,7 @@ class Config:
             if log_path is not None:
                 logger.warning("dry-run: %s log redirected to logging.info" % log_desc)
         else:
-            self._open_files.append(io.open(log_path, mode=mode, encoding="utf_8"))
+            self._open_files.append(open(log_path, mode=mode, encoding="utf_8"))
             line_format = "%s\n"
             log_func = self._open_files[-1].write
 
@@ -139,7 +138,7 @@ class Config:
         if dry_run:
             logger.warning("dry-run: %s db opened in readonly mode" % db_desc)
             if not isinstance(db, dict):
-                volatile_db = dict((k, db[k]) for k in db)
+                volatile_db = {k: db[k] for k in db}
                 db.close()
                 db = volatile_db
         else:

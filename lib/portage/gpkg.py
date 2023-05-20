@@ -707,7 +707,7 @@ class tar_safe_extract:
         them to the dest_dir after sanity check.
         """
         if self.closed:
-            raise IOError("Tar file is closed.")
+            raise OSError("Tar file is closed.")
         temp_dir = tempfile.TemporaryDirectory(dir=dest_dir)
         try:
             while True:
@@ -1150,7 +1150,8 @@ class gpkg:
             prefix = os.path.commonpath(container.getnames())
             if not prefix:
                 raise InvalidBinaryPackageFormat(
-                    f"gpkg file structure mismatch in {self.gpkg_file}"
+                    f"gpkg file structure mismatch in {self.gpkg_file}; files: "
+                    f"{container.getnames()}"
                 )
 
         shutil.move(tmp_gpkg_file_name, self.gpkg_file)

@@ -2,7 +2,6 @@
 # Distributed under the terms of the GNU General Public License v2
 
 import datetime
-import io
 import logging
 import random
 import re
@@ -160,8 +159,10 @@ class RsyncSync(NewBase):
             # so we may as well bail out before actual rsync happens.
             if openpgp_env is not None and self.repo.sync_openpgp_key_path is not None:
                 try:
-                    out.einfo("Using keys from %s" % (self.repo.sync_openpgp_key_path,))
-                    with io.open(self.repo.sync_openpgp_key_path, "rb") as f:
+                    out.einfo(
+                        "Using keys from {}".format(self.repo.sync_openpgp_key_path)
+                    )
+                    with open(self.repo.sync_openpgp_key_path, "rb") as f:
                         openpgp_env.import_key(f)
                     self._refresh_keys(openpgp_env)
                 except (GematoException, asyncio.TimeoutError) as e:
@@ -264,7 +265,7 @@ class RsyncSync(NewBase):
                             getaddrinfo_host, None, family, socket.SOCK_STREAM
                         )
                     )
-                except socket.error as e:
+                except OSError as e:
                     writemsg_level(
                         "!!! getaddrinfo failed for '%s': %s\n"
                         % (_unicode_decode(hostname), str(e)),
@@ -446,11 +447,11 @@ class RsyncSync(NewBase):
                             out.ewarn(
                                 "You may want to try using another mirror and/or reporting this one:"
                             )
-                            out.ewarn("  %s" % (dosyncuri,))
+                            out.ewarn("  {}".format(dosyncuri))
                             out.ewarn("")
                             out.quiet = quiet
 
-                        out.einfo("Manifest timestamp: %s UTC" % (ts.ts,))
+                        out.einfo("Manifest timestamp: {} UTC".format(ts.ts))
                         out.einfo("Valid OpenPGP signature found:")
                         out.einfo(
                             "- primary key: %s"
@@ -464,12 +465,12 @@ class RsyncSync(NewBase):
                         # if nothing has changed, skip the actual Manifest
                         # verification
                         if not local_state_unchanged:
-                            out.ebegin("Verifying %s" % (download_dir,))
+                            out.ebegin("Verifying {}".format(download_dir))
                             m.assert_directory_verifies()
                             out.eend(0)
                     except GematoException as e:
                         writemsg_level(
-                            "!!! Manifest verification failed:\n%s\n" % (e,),
+                            "!!! Manifest verification failed:\n{}\n".format(e),
                             level=logging.ERROR,
                             noiselevel=-1,
                         )
@@ -548,7 +549,7 @@ class RsyncSync(NewBase):
                     self.self.xterm_titles,
                     "Created New Directory %s " % self.repo.location,
                 )
-        except IOError:
+        except OSError:
             return (1, False)
         return self.update()
 

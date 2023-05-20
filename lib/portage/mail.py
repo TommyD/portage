@@ -10,7 +10,6 @@
 # 'smtlib' module imports the 'email' module, that's imported
 # locally as well.
 
-import socket
 import sys
 
 from portage import os
@@ -150,7 +149,7 @@ def send_mail(mysettings, message):
             raise portage.exception.PortageException(
                 _(f"!!! An error occurred while trying to send logmail:\n{e}")
             )
-        except socket.error as e:
+        except OSError as e:
             raise portage.exception.PortageException(
                 _(
                     f"!!! A network error occurred while trying to send logmail:\n{e}\nSure you configured PORTAGE_ELOG_MAILURI correctly?"
