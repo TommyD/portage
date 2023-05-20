@@ -144,7 +144,6 @@ class Package(Task):
                 iuse += " multilib_abi_" + multilib_abis
             iuse += " abiwrapper"
             self._metadata["IUSE"] = iuse
-        usealiases = self.root_config.settings._use_manager.getUseAliases(self)
         self.iuse = self._iuse(
             self, self._metadata["IUSE"].split(), implicit_match, self.eapi
         )
