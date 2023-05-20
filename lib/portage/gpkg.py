@@ -21,6 +21,7 @@ from portage import normalize_path
 from portage import _encodings
 from portage import _unicode_decode
 from portage import _unicode_encode
+from portage.binpkg import get_binpkg_format
 from portage.exception import (
     FileNotFound,
     InvalidBinaryPackageFormat,
@@ -38,6 +39,7 @@ from portage.util._urlopen import urlopen
 from portage.util import writemsg
 from portage.util import shlex_split, varexpand
 from portage.util.compression_probe import _compressors
+from portage.util.cpuinfo import makeopts_to_job_count
 from portage.process import find_binary
 from portage.const import MANIFEST2_HASH_DEFAULTS, HASHING_BLOCKSIZE
 
@@ -90,6 +92,7 @@ class tar_stream_writer:
         gid              # drop root group to gid
         """
         self.checksum_helper = checksum_helper
+        self.cmd = cmd
         self.closed = False
         self.container = container
         self.killed = False
@@ -122,7 +125,6 @@ class tar_stream_writer:
                     cmd,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
                     user=self.uid,
                     group=self.gid,
                 )
@@ -131,7 +133,6 @@ class tar_stream_writer:
                     cmd,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
                     preexec_fn=self._drop_privileges,
                 )
 
@@ -193,10 +194,10 @@ class tar_stream_writer:
                 buffer = self.proc.stdout.read(HASHING_BLOCKSIZE)
                 if not buffer:
                     self.proc.stdout.close()
-                    self.proc.stderr.close()
                     return
             except BrokenPipeError:
                 self.proc.stdout.close()
+                writemsg(colorize("BAD", f"GPKG subprocess failed: {self.cmd} \n"))
                 if not self.killed:
                     # Do not raise error if killed by portage
                     raise CompressorOperationFailed("PIPE broken")
@@ -214,7 +215,12 @@ class tar_stream_writer:
 
         if self.proc:
             # Write to external program
-            self.proc.stdin.write(data)
+            try:
+                self.proc.stdin.write(data)
+            except BrokenPipeError:
+                self.error = True
+                writemsg(colorize("BAD", f"GPKG subprocess failed: {self.cmd} \n"))
+                raise CompressorOperationFailed("PIPE broken")
         else:
             # Write to container
             self.container.fileobj.write(data)
@@ -232,7 +238,8 @@ class tar_stream_writer:
         if self.proc is not None:
             self.proc.stdin.close()
             if self.proc.wait() != os.EX_OK:
-                raise CompressorOperationFailed("compression failed")
+                if not self.error:
+                    raise CompressorOperationFailed("compression failed")
             if self.read_thread.is_alive():
                 self.read_thread.join()
 
@@ -312,7 +319,6 @@ class tar_stream_reader:
                     cmd,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
                     user=self.uid,
                     group=self.gid,
                 )
@@ -321,7 +327,6 @@ class tar_stream_reader:
                     cmd,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
                     preexec_fn=self._drop_privileges,
                 )
             self.read_io = self.proc.stdout
@@ -367,6 +372,7 @@ class tar_stream_reader:
                     break
         except BrokenPipeError:
             if self.killed is False:
+                writemsg(colorize("BAD", f"GPKG subprocess failed: {self.cmd} \n"))
                 raise CompressorOperationFailed("PIPE broken")
 
     def _drop_privileges(self):
@@ -424,14 +430,11 @@ class tar_stream_reader:
             self.thread.join()
             try:
                 if self.proc.wait() != os.EX_OK:
-                    if not self.proc.stderr.closed:
-                        stderr = self.proc.stderr.read().decode()
                     if not self.killed:
-                        writemsg(colorize("BAD", f"!!!\n{stderr}"))
+                        writemsg(colorize("BAD", f"GPKG external program failed."))
                         raise CompressorOperationFailed("decompression failed")
             finally:
                 self.proc.stdout.close()
-                self.proc.stderr.close()
 
 
 class checksum_helper:
@@ -1041,6 +1044,14 @@ class gpkg:
             self._add_signature(checksum_info, image_tarinfo, container)
 
         self._add_manifest(container)
+
+        # Check if all directories are the same in the container
+        prefix = os.path.commonpath(container.getnames())
+        if not prefix:
+            raise InvalidBinaryPackageFormat(
+                f"gpkg file structure mismatch in {self.gpkg_file}"
+            )
+
         container.close()
 
     def decompress(self, decompress_dir):
@@ -1125,15 +1136,22 @@ class gpkg:
                         os.path.join(self.prefix, file_name_old)
                     )
                     new_data_tarinfo = copy(old_data_tarinfo)
-                    new_data_tarinfo.name = new_data_tarinfo.name.replace(
-                        old_basename, new_basename, 1
-                    )
+                    new_file_path = list(os.path.split(new_data_tarinfo.name))
+                    new_file_path[0] = new_basename
+                    new_data_tarinfo.name = os.path.join(*new_file_path)
                     container.addfile(
                         new_data_tarinfo, container_old.extractfile(old_data_tarinfo)
                     )
                     self.checksums.append(m)
 
             self._add_manifest(container)
+
+            # Check if all directories are the same in the container
+            prefix = os.path.commonpath(container.getnames())
+            if not prefix:
+                raise InvalidBinaryPackageFormat(
+                    f"gpkg file structure mismatch in {self.gpkg_file}"
+                )
 
         shutil.move(tmp_gpkg_file_name, self.gpkg_file)
 
@@ -1214,6 +1232,13 @@ class gpkg:
                         self._add_signature(checksum_info, new_data_tarinfo, container)
 
             self._add_manifest(container)
+
+            # Check if all directories are the same in the container
+            prefix = os.path.commonpath(container.getnames())
+            if not prefix:
+                raise InvalidBinaryPackageFormat(
+                    f"gpkg file structure mismatch in {self.gpkg_file}"
+                )
 
         shutil.move(tmp_gpkg_file_name, self.gpkg_file)
 
@@ -1431,6 +1456,14 @@ class gpkg:
             self._add_signature(checksum_info, image_tarinfo, container)
 
         self._add_manifest(container)
+
+        # Check if all directories are the same in the container
+        prefix = os.path.commonpath(container.getnames())
+        if not prefix:
+            raise InvalidBinaryPackageFormat(
+                f"gpkg file structure mismatch in {self.gpkg_file}"
+            )
+
         container.close()
 
     def _record_checksum(self, checksum_info, tarinfo):
@@ -1554,6 +1587,7 @@ class gpkg:
         with open(self.gpkg_file, "rb") as container:
             container_tar_format = self._get_tar_format(container)
             if container_tar_format is None:
+                get_binpkg_format(self.gpkg_file, check_file=True)
                 raise InvalidBinaryPackageFormat(
                     f"Cannot identify tar format: {self.gpkg_file}"
                 )
@@ -1563,12 +1597,14 @@ class gpkg:
             try:
                 container_files = container.getnames()
             except tarfile.ReadError:
+                get_binpkg_format(self.gpkg_file, check_file=True)
                 raise InvalidBinaryPackageFormat(
                     f"Cannot read tar file: {self.gpkg_file}"
                 )
 
             # Check if gpkg version file exists in any place
             if self.gpkg_version not in (os.path.basename(f) for f in container_files):
+                get_binpkg_format(self.gpkg_file, check_file=True)
                 raise InvalidBinaryPackageFormat(f"Invalid gpkg file: {self.gpkg_file}")
 
             # Check how many layers are in the container
@@ -1773,7 +1809,7 @@ class gpkg:
 
     def _get_binary_cmd(self, compression, mode):
         """
-        get command list form portage and try match compressor
+        get command list from portage and try match compressor
         """
         if compression not in _compressors:
             raise InvalidCompressionMethod(compression)
@@ -1782,7 +1818,20 @@ class gpkg:
         if mode not in compressor:
             raise InvalidCompressionMethod("{}: {}".format(compression, mode))
 
-        cmd = shlex_split(varexpand(compressor[mode], mydict=self.settings))
+        if mode == "compress" and (
+            self.settings.get(f"BINPKG_COMPRESS_FLAGS_{compression.upper()}", None)
+            is not None
+        ):
+            compressor["compress"] = compressor["compress"].replace(
+                "${BINPKG_COMPRESS_FLAGS}",
+                f"${{BINPKG_COMPRESS_FLAGS_{compression.upper()}}}",
+            )
+
+        cmd = compressor[mode].replace(
+            "{JOBS}", str(makeopts_to_job_count(self.settings.get("MAKEOPTS", "1")))
+        )
+        cmd = shlex_split(varexpand(cmd, mydict=self.settings))
+
         # Filter empty elements that make Popen fail
         cmd = [x for x in cmd if x != ""]
 

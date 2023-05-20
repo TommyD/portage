@@ -10,6 +10,7 @@ from portage.util.compression_probe import (
     compression_probe,
     _compressors,
 )
+from portage.util.cpuinfo import makeopts_to_job_count
 from portage.process import find_binary
 from portage.util import (
     shlex_split,
@@ -33,7 +34,9 @@ class BinpkgExtractorAsync(SpawnProcess):
         if binpkg_format == "xpak":
             self._xpak_start()
         else:
-            raise InvalidBinaryPackageFormat(self.pkg_path)
+            raise InvalidBinaryPackageFormat(
+                f"{self.pkg_path} is not a valid xpak binary package"
+            )
 
     def _xpak_start(self):
         tar_options = ""
@@ -53,6 +56,9 @@ class BinpkgExtractorAsync(SpawnProcess):
         decomp = _compressors.get(compression_probe(self.pkg_path))
         if decomp is not None:
             decomp_cmd = decomp.get("decompress")
+            decomp_cmd = decomp_cmd.replace(
+                "{JOBS}", str(makeopts_to_job_count(self.env.get("MAKEOPTS", "1")))
+            )
         elif tarfile.is_tarfile(
             portage._unicode_encode(
                 self.pkg_path, encoding=portage._encodings["fs"], errors="strict"

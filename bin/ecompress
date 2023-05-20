@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 1999-2020 Gentoo Authors
+# Copyright 1999-2022 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 source "${PORTAGE_BIN_PATH}"/isolated-functions.sh || exit 1
@@ -71,9 +71,9 @@ while [[ $# -gt 0 ]] ; do
 				# note: to save time, we need to do this only if there's
 				# at least one compressed file
 				case ${path} in
-					*.Z|*.gz|*.bz2|*.lzma|*.xz)
+					*.Z|*.gz|*.bz2|*.lzma|.lz|.lzo|.lz4|*.xz|*.zst)
 						vpath=${path%.*}
-						for comp in '' .Z .gz .bz2 .lzma .xz; do
+						for comp in '' .Z .gz .bz2 .lzma .lz .lzo .lz4 .xz .zst; do
 							if [[ ${vpath}${comp} != ${path} && \
 									-e ${vpath}${comp} ]]; then
 								collisions[${path}]=1
@@ -128,6 +128,8 @@ if [[ ${PORTAGE_COMPRESS_FLAGS+set} != "set" ]] ; then
 		# See: https://bugs.gentoo.org/672916
 		# Setting '--rm' will remove the source files after a successful compression.
 		lz4)  PORTAGE_COMPRESS_FLAGS="-m --rm";;
+		xz)   PORTAGE_COMPRESS_FLAGS="-q -T$(___makeopts_jobs) --memlimit-compress=50%";;
+		zstd) PORTAGE_COMPRESS_FLAGS="-q --rm -T$(___makeopts_jobs)";;
 	esac
 fi
 

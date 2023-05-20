@@ -1,3 +1,129 @@
+portage-3.0.39 (2022-11-20)
+--------------
+
+Features:
+* gpkg: Call xz and zstd with -T N where N is the number of jobs from ${MAKEOPTS}
+  for parallel compression (xz & zstd) and decompression (xz with newer versions).
+
+* gpkg: Add per format compression flags for binpkgs. This adds new config
+  options BINPKG_COMPRESS_FLAGS_[format] to be used for different compression
+  methods. General BINPKG_COMPRESS_FLAGS will be ignored if current method had
+  specified BINPKG_COMPRESS_FLAGS_[format] (bug #871573).
+
+* sync: git: git will sync with --depth=1 unless otherwise specified in repos.conf
+  (bug #824782).
+
+* install-qa-check.d: 90gcc-warnings: Add additional code quality warnings
+  which are indicative of problems with LTO in particular:
+  * -Wbuiltin-declaration-mismatch
+  * -Wlto-type-mismatch (LTO esp.)
+  * -Wmismatched-dealloc
+  * -Wodr (LTO esp.)
+  * -Wreturn-type
+  * -Wstringop-overflow (GCC, FORTIFY_SOURCE)
+  * -Wfortify-source (Clang, FORTIFY_SOURCE)
+  * -Wstrlcpy-strlcat-size
+  * -Wstrncat-size
+  * -Wsuspicious-bzero
+  * -Wvarargs
+  * -Wargument-undefined-behaviour (Clang)
+  * -Wincompatible-function-pointer-types (Clang, becomes fatal in Clang 16)
+    (note we already have -Wincompatible-pointer-types in the list for GCC)
+  * -Wundefined-reinterpret-cast (Clang, C++ strict aliasing)
+  * -Wcast-function-type-strict (Clang, CFI)
+  * Further -Wformat matches for missing specifiers.
+    In future, we may warn on all -Wformat (in particular because of e.g.
+    time_t & LFS).
+
+* install-qa-check.d: 90gcc-warnings: Always die on -Wimplicit-function-declaration
+  and remove bin/check-implicit-pointer-usage.py of dubious licencing (it was
+  broken since GCC 4.5 because of output changes anyway, bug #365655).
+
+  -Wimplicit-function-declaration becomes an error in Clang 16 onwards and
+  GCC is likely to do the same from 14 onwards. See bug #870412.
+
+* ecompress, etc: Support additional compression suffixes for texinfo:
+  .Z, .bz2, .lzma, .lz, .xz, .zst (bug #757525).
+
+Bug fixes:
+* binpkg: Deprecate BINPKG_FORMAT in the binpkg manifest ('Packages') because
+  it can become out-of-sync with reality and shouldn't be relied upon anyway
+  (bug #877419).
+
+* binpkg: Add various asserts / integrity checks to detect structure mismatches
+  and detect problems earlier (bug #877357, bug #877271, bug #877419).
+
+* binpkg: gpkg: Try to correct mismatched structures (old/new gpkg structure)
+  (bug #877271).
+
+* binpkg: gpkg: Handle package renames ('updates') where the same category was
+  used but with a new package name (bug #877357).
+
+* binpkg: gpkg: Don't silence compressor stderr to ease debugging (bug #877215).
+
+* Manifest: Fix Manifest.addFile() calls and add tests (bug #875860).
+
+* ecompress, etc: Pass --quiet to xz to reduce noise from "reducing threads"
+  messages.
+
+* ecompress, etc: Pass --memlimit-compress=50% to xz to avoid breakage
+  on 32-bit systems with large -Tn. Required for < xz-5.3.3_alpha and
+  has an equivalent effect to the limiting that comes with newer xz versions.
+  We don't need it for decompression as it's there by default in newer xz
+  and it's a no-op in older xz.
+
+* emerge(1), make.conf(5), xpak(5): document BINPKG_FORMAT and the gpkg binary
+  packate format further.
+
+* sync: git: Fix sync printing local repo path (bug #875812)
+
+portage-3.0.38.1 (2022-10-04)
+--------------
+
+Bug fixes:
+* ecompress: Fix typo in ___makeopts_jobs (bug #874597).
+
+portage-3.0.38 (2022-10-01)
+--------------
+
+Features:
+* unpack now calls xz(1) with -T N where N is the number of jobs from ${MAKEOPTS}.
+  This allows decompression in parallel with new enough xz (>= xz-utils 5.3.3 alpha)
+  and where the source file was compressed using the parallel xz compressor
+  (which becomes the default with newer xz too).
+
+* portage: sets: Parse INCLUDES/EXCLUDES in VariableSet which allows properly
+  checking for dependencies. Update @golang-rebuild accordingly which now
+  includes all packages depending on dev-lang/go (bug #827974, bug #865115)
+
+* cnf: Provide a @rust-rebuild set, similar to @golang-rebuild.
+
+* bin: ecompress: xz, zstd: Pass -T N where N is the number of jobs from ${MAKEOPTS}
+  to xz, zstd for parallel compression.
+
+* bin: ecompress: xz: Pass -9 to xz for compression level like we do for bzip2 & gzip.
+
+Bug fixes:
+* emerge: Scheduler: Fix filenames for binpkgs in some cases - reuse existing
+  filename and don't allocate a new one (bug #872392).
+
+* dbapi: bintree: Avoid fetching 'Packages' multiple times (bug #864259).
+
+* binpkg: Handle failure of various BINPKG_COMPRESS_* commands (bug #871570).
+
+* data: Fix PORTAGE_USERNAME default (bug #873088).
+
+* bin: isolated-functions.sh: return number of CPUs in ___makeopts_jobs as default
+  instead of 1 to match Portage's behavior on the Python side.
+
+* bin: ecompress: Recognize .lz, .lzo, .lz4, and .zst as compressed file
+  suffixes for the purposes of the internal compressed file collision check.
+
+* bin: ecompress: zstd: Set '-q --rm' in PORTAGE_COMPRESS_FLAGS to behave
+  like other compressors.
+
+* portage: _global_updates: Fix update summary output.
+
 portage-3.0.37 (2022-09-23)
 --------------
 

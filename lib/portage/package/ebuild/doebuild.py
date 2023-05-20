@@ -111,7 +111,7 @@ from portage.util import (
     writemsg_stdout,
     write_atomic,
 )
-from portage.util.cpuinfo import get_cpu_count
+from portage.util.cpuinfo import get_cpu_count, makeopts_to_job_count
 from portage.util.lafilefixer import rewrite_lafile
 from portage.util.compression_probe import _compressors
 from portage.util.futures import asyncio
@@ -255,7 +255,7 @@ def _spawn_phase(
             actionmap=actionmap,
             returnpid=returnpid,
             logfile=logfile,
-            **kwargs
+            **kwargs,
         )
 
     # The logfile argument is unused here, since EbuildPhase uses
@@ -266,7 +266,7 @@ def _spawn_phase(
         phase=phase,
         scheduler=SchedulerInterface(asyncio._safe_loop()),
         settings=settings,
-        **kwargs
+        **kwargs,
     )
 
     ebuild_phase.start()
@@ -666,9 +666,24 @@ def doebuild_environment(
                 # Empty BINPKG_COMPRESS disables compression.
                 mysettings["PORTAGE_COMPRESSION_COMMAND"] = "cat"
         else:
+            if (
+                settings.get(
+                    f"BINPKG_COMPRESS_FLAGS_{binpkg_compression.upper()}", None
+                )
+                is not None
+            ):
+                compression["compress"] = compression["compress"].replace(
+                    "${BINPKG_COMPRESS_FLAGS}",
+                    f"${{BINPKG_COMPRESS_FLAGS_{binpkg_compression.upper()}}}",
+                )
+
             try:
+                compression_binary = compression["compress"].replace(
+                    "{JOBS}",
+                    str(makeopts_to_job_count(mysettings.get("MAKEOPTS", "1"))),
+                )
                 compression_binary = shlex_split(
-                    varexpand(compression["compress"], mydict=settings)
+                    varexpand(compression_binary, mydict=settings)
                 )[0]
             except IndexError as e:
                 writemsg(
@@ -683,9 +698,13 @@ def doebuild_environment(
                         % (binpkg_compression, missing_package)
                     )
                 else:
+                    compression_binary = compression["compress"].replace(
+                        "{JOBS}",
+                        str(makeopts_to_job_count(mysettings.get("MAKEOPTS", "1"))),
+                    )
                     cmd = [
                         varexpand(x, mydict=settings)
-                        for x in shlex_split(compression["compress"])
+                        for x in shlex_split(compression_binary)
                     ]
                     # Filter empty elements
                     cmd = [x for x in cmd if x != ""]
@@ -1900,7 +1919,7 @@ def spawn(
     ipc=True,
     mountns=False,
     pidns=False,
-    **keywords
+    **keywords,
 ):
     """
     Spawn a subprocess with extra portage-specific options.
@@ -2108,7 +2127,7 @@ def spawn(
             scheduler=SchedulerInterface(asyncio._safe_loop()),
             spawn_func=spawn_func,
             settings=mysettings,
-            **keywords
+            **keywords,
         )
 
         proc.start()
