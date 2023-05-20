@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright 1999-2018 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 #
@@ -20,6 +20,8 @@ install_symlink_html_docs() {
 	[[ " ${FEATURES} " == *" force-prefix "* ]] || \
 	if ! ___eapi_has_prefix_variables; then
 		local ED=${D}
+	else
+		[[ ! -d ${ED} && -d ${D} ]] && dodir /
 	fi
 	[[ -e "${ED}" ]] || return 0
 	cd "${ED}" || die "cd failed"
@@ -85,8 +87,7 @@ install_qa_check() {
 		local EPREFIX= ED=${D}
 	fi
 
-	[[ -d "${ED}" ]] || return 0
-	cd "${ED}" || die "cd failed"
+	cd "${D}" || die "cd failed"
 
 	# Collect the paths for QA checks, highest prio first.
 	paths=(
@@ -136,7 +137,7 @@ install_qa_check() {
 		)
 	done < <(printf "%s\0" "${qa_checks[@]}" | LC_ALL=C sort -u -z)
 
-	if has chflags $FEATURES ; then
+	if has chflags ${FEATURES} ; then
 		# Save all the file flags for restoration afterwards.
 		mtree -c -p "${ED}" -k flags > "${T}/bsdflags.mtree"
 		# Remove all the file flags so that we can do anything necessary.
@@ -154,7 +155,7 @@ install_qa_check() {
 		"${PORTAGE_BIN_PATH}"/ecompress --dequeue
 	fi
 
-	if has chflags $FEATURES ; then
+	if has chflags ${FEATURES} ; then
 		# Restore all the file flags that were saved earlier on.
 		mtree -U -e -p "${ED}" -k flags < "${T}/bsdflags.mtree" &> /dev/null
 	fi
@@ -165,7 +166,7 @@ install_qa_check() {
 	# containing pre-built binaries.
 	if type -P scanelf > /dev/null ; then
 		# Save NEEDED information after removing self-contained providers
-		rm -f "$PORTAGE_BUILDDIR"/build-info/NEEDED{,.ELF.2}
+		rm -f "${PORTAGE_BUILDDIR}"/build-info/NEEDED{,.ELF.2}
 
 		# We don't use scanelf -q, since that would omit libraries like
 		# musl's /usr/lib/libc.so which do not have any DT_NEEDED or
@@ -259,7 +260,7 @@ install_qa_check() {
 
 __dyn_instprep() {
 	if [[ -e ${PORTAGE_BUILDDIR}/.instprepped ]] ; then
-		__vecho ">>> It appears that '$PF' is already instprepped; skipping."
+		__vecho ">>> It appears that '${PF}' is already instprepped; skipping."
 		__vecho ">>> Remove '${PORTAGE_BUILDDIR}/.instprepped' to force instprep."
 		return 0
 	fi
@@ -370,7 +371,7 @@ preinst_mask() {
 	local f x
 	for f in man info doc; do
 		if has no${f} ${FEATURES}; then
-			INSTALL_MASK+=" /usr/share/${f}"
+			INSTALL_MASK+=" ${EPREFIX}/usr/share/${f}"
 		fi
 	done
 
@@ -397,29 +398,29 @@ preinst_sfperms() {
 	fi
 
 	# Smart FileSystem Permissions
-	if has sfperms $FEATURES; then
+	if has sfperms ${FEATURES}; then
 		local i
 		find "${ED}" -type f -perm -4000 -print0 | \
 		while read -r -d $'\0' i ; do
-			if [[ -n "$(find "$i" -perm -2000)" ]]; then
+			if [[ -n "$(find "${i}" -perm -2000)" ]]; then
 				ebegin ">>> SetUID and SetGID: [chmod o-r] ${i#${ED%/}}"
-				chmod o-r "$i"
+				chmod o-r "${i}"
 				eend $?
 			else
 				ebegin ">>> SetUID: [chmod go-r] ${i#${ED%/}}"
-				chmod go-r "$i"
+				chmod go-r "${i}"
 				eend $?
 			fi
 		done
 		find "${ED}" -type f -perm -2000 -print0 | \
 		while read -r -d $'\0' i ; do
-			if [[ -n "$(find "$i" -perm -4000)" ]]; then
+			if [[ -n "$(find "${i}" -perm -4000)" ]]; then
 				# This case is already handled
 				# by the SetUID check above.
 				true
 			else
 				ebegin ">>> SetGID: [chmod o-r] ${i#${ED%/}}"
-				chmod o-r "$i"
+				chmod o-r "${i}"
 				eend $?
 			fi
 		done
@@ -437,7 +438,7 @@ preinst_suid_scan() {
 	fi
 
 	# Total suid control
-	if has suidctl $FEATURES; then
+	if has suidctl ${FEATURES}; then
 		local i sfconf x
 		sfconf=${PORTAGE_CONFIGROOT}etc/portage/suidctl.conf
 		# sandbox prevents us from writing directly
@@ -498,38 +499,45 @@ preinst_selinux_labels() {
 }
 
 __dyn_package() {
-
 	if ! ___eapi_has_prefix_variables; then
 		local EPREFIX=
 	fi
 
-	# Make sure $PWD is not ${D} so that we don't leave gmon.out files
+	# Make sure ${PWD} is not ${D} so that we don't leave gmon.out files
 	# in there in case any tools were built with -pg in CFLAGS.
 	cd "${T}" || die
 
 	# Sandbox is disabled in case the user wants to use a symlink
-	# for $PKGDIR and/or $PKGDIR/All.
+	# for ${PKGDIR} and/or ${PKGDIR}/All.
 	export SANDBOX_ON="0"
 	[[ -z "${PORTAGE_BINPKG_TMPFILE}" ]] && \
 		die "PORTAGE_BINPKG_TMPFILE is unset"
 	mkdir -p "${PORTAGE_BINPKG_TMPFILE%/*}" || die "mkdir failed"
 
+	if [[ ! -z "${BUILD_ID}" ]]; then
+		echo -n "${BUILD_ID}" > "${PORTAGE_BUILDDIR}"/build-info/BUILD_ID
+	fi
+
 	if [[ "${BINPKG_FORMAT}" == "xpak" ]]; then
 		local tar_options=""
-		[[ $PORTAGE_VERBOSE = 1 ]] && tar_options+=" -v"
+
+		[[ ${PORTAGE_VERBOSE} = 1 ]] && tar_options+=" -v"
 		has xattr ${FEATURES} && [[ $(tar --help 2> /dev/null) == *--xattrs* ]] && tar_options+=" --xattrs"
-		[[ -z "${PORTAGE_COMPRESSION_COMMAND}" ]] && \
-			die "PORTAGE_COMPRESSION_COMMAND is unset"
-		tar $tar_options -cf - $PORTAGE_BINPKG_TAR_OPTS -C "${D}" . | \
-			$PORTAGE_COMPRESSION_COMMAND > "$PORTAGE_BINPKG_TMPFILE"
-		assert "failed to pack binary package: '$PORTAGE_BINPKG_TMPFILE'"
+
+		[[ -z "${PORTAGE_COMPRESSION_COMMAND}" ]] && die "PORTAGE_COMPRESSION_COMMAND is unset"
+
+		tar ${tar_options} -cf - ${PORTAGE_BINPKG_TAR_OPTS} -C "${D}" . | \
+			${PORTAGE_COMPRESSION_COMMAND} > "${PORTAGE_BINPKG_TMPFILE}"
+		assert "failed to pack binary package: '${PORTAGE_BINPKG_TMPFILE}'"
+
 		PYTHONPATH=${PORTAGE_PYTHONPATH:-${PORTAGE_PYM_PATH}} \
-			"${PORTAGE_PYTHON:-/usr/bin/python}" "$PORTAGE_BIN_PATH"/xpak-helper.py recompose \
-			"$PORTAGE_BINPKG_TMPFILE" "$PORTAGE_BUILDDIR/build-info"
+			"${PORTAGE_PYTHON:-/usr/bin/python}" "${PORTAGE_BIN_PATH}"/xpak-helper.py recompose \
+			"${PORTAGE_BINPKG_TMPFILE}" "${PORTAGE_BUILDDIR}/build-info"
 		if [[ $? -ne 0 ]]; then
 			rm -f "${PORTAGE_BINPKG_TMPFILE}"
 			die "Failed to append metadata to the tbz2 file"
 		fi
+
 		local md5_hash=""
 		if type md5sum &>/dev/null ; then
 			md5_hash=$(md5sum "${PORTAGE_BINPKG_TMPFILE}")
@@ -538,14 +546,14 @@ __dyn_package() {
 			md5_hash=$(md5 "${PORTAGE_BINPKG_TMPFILE}")
 			md5_hash=${md5_hash##* }
 		fi
-		[[ -n "${md5_hash}" ]] && \
-			echo ${md5_hash} > "${PORTAGE_BUILDDIR}"/build-info/BINPKGMD5
+
+		[[ -n "${md5_hash}" ]] && echo ${md5_hash} > "${PORTAGE_BUILDDIR}"/build-info/BINPKGMD5
 		__vecho ">>> Done."
 
 	elif [[ "${BINPKG_FORMAT}" == "gpkg" ]]; then
 		PYTHONPATH=${PORTAGE_PYTHONPATH:-${PORTAGE_PYM_PATH}} \
-			"${PORTAGE_PYTHON:-/usr/bin/python}" "$PORTAGE_BIN_PATH"/gpkg-helper.py compress \
-			"${CATEGORY}/${PF}" "$PORTAGE_BINPKG_TMPFILE" "$PORTAGE_BUILDDIR/build-info" "${D}"
+			"${PORTAGE_PYTHON:-/usr/bin/python}" "${PORTAGE_BIN_PATH}"/gpkg-helper.py compress \
+			"${PF}${BUILD_ID:+-${BUILD_ID}}" "${PORTAGE_BINPKG_TMPFILE}" "${PORTAGE_BUILDDIR}/build-info" "${D}"
 		if [[ $? -ne 0 ]]; then
 			rm -f "${PORTAGE_BINPKG_TMPFILE}"
 			die "Failed to create binpkg file"
@@ -556,8 +564,7 @@ __dyn_package() {
 	fi
 
 	cd "${PORTAGE_BUILDDIR}"
-	>> "$PORTAGE_BUILDDIR/.packaged" || \
-		die "Failed to create $PORTAGE_BUILDDIR/.packaged"
+	>> "${PORTAGE_BUILDDIR}/.packaged" || die "Failed to create ${PORTAGE_BUILDDIR}/.packaged"
 }
 
 __dyn_spec() {
@@ -603,30 +610,35 @@ __dyn_rpm() {
 	fi
 
 	cd "${T}" || die "cd failed"
+
 	local machine_name=${CHOST%%-*}
 	local dest_dir=${T}/rpmbuild/RPMS/${machine_name}
+
 	addwrite "${RPMDIR}"
 	__dyn_spec
 	HOME=${T} \
 	rpmbuild -bb --clean --nodeps --rmsource "${PF}.spec" --buildroot "${D}" --target "${CHOST}" || die "Failed to integrate rpm spec file"
+
 	install -D "${dest_dir}/${PN}-${PV}-${PR}.${machine_name}.rpm" \
 		"${RPMDIR}/${CATEGORY}/${PN}-${PV}-${PR}.rpm" || \
 		die "Failed to move rpm"
 }
 
 die_hooks() {
-	[[ -f $PORTAGE_BUILDDIR/.die_hooks ]] && return
+	[[ -f ${PORTAGE_BUILDDIR}/.die_hooks ]] && return
+
 	local x
-	for x in $EBUILD_DEATH_HOOKS ; do
-		$x >&2
+	for x in ${EBUILD_DEATH_HOOKS} ; do
+		${x} >&2
 	done
-	> "$PORTAGE_BUILDDIR/.die_hooks"
+
+	> "${PORTAGE_BUILDDIR}/.die_hooks"
 }
 
 success_hooks() {
 	local x
-	for x in $EBUILD_SUCCESS_HOOKS ; do
-		$x
+	for x in ${EBUILD_SUCCESS_HOOKS} ; do
+		${x}
 	done
 }
 
@@ -634,15 +646,17 @@ install_hooks() {
 	local hooks_dir="${PORTAGE_CONFIGROOT}etc/portage/hooks/install"
 	local fp
 	local ret=0
+
 	shopt -s nullglob
 	for fp in "${hooks_dir}"/*; do
-		if [[ -x "$fp" ]]; then
-			"$fp"
-			ret=$(( $ret | $? ))
+		if [[ -x "${fp}" ]]; then
+			"${fp}"
+			ret=$(( ${ret} | $? ))
 		fi
 	done
 	shopt -u nullglob
-	return $ret
+
+	return ${ret}
 }
 
 eqatag() {
@@ -651,15 +665,19 @@ eqatag() {
 
 if [[ -n "${MISC_FUNCTIONS_ARGS}" ]]; then
 	__source_all_bashrcs
-	[[ "$PORTAGE_DEBUG" == "1" ]] && set -x
+
+	[[ "${PORTAGE_DEBUG}" == "1" ]] && set -x
+
 	for x in ${MISC_FUNCTIONS_ARGS}; do
 		${x}
 	done
 	unset x
-	[[ -n $PORTAGE_EBUILD_EXIT_FILE ]] && > "$PORTAGE_EBUILD_EXIT_FILE"
-	if [[ -n $PORTAGE_IPC_DAEMON ]] ; then
-		[[ ! -s $SANDBOX_LOG ]]
-		"$PORTAGE_BIN_PATH"/ebuild-ipc exit $?
+
+	[[ -n ${PORTAGE_EBUILD_EXIT_FILE} ]] && > "${PORTAGE_EBUILD_EXIT_FILE}"
+
+	if [[ -n ${PORTAGE_IPC_DAEMON} ]] ; then
+		[[ ! -s ${SANDBOX_LOG} ]]
+		"${PORTAGE_BIN_PATH}"/ebuild-ipc exit $?
 	fi
 fi
 

@@ -66,6 +66,7 @@ x_scripts = {
         "bin/glsa-check",
         "bin/portageq",
         "bin/quickpkg",
+        "bin/gpkg-sign",
     ],
     "sbin": [
         "bin/archive-conf",
@@ -817,7 +818,7 @@ def get_data_files(regular_files, venv_files):
 
 setup(
     name="portage",
-    version="3.0.34",
+    version="3.0.36",
     url="https://wiki.gentoo.org/wiki/Project:Portage",
     project_urls={
         "Release Notes": "https://gitweb.gentoo.org/proj/portage.git/plain/RELEASE-NOTES",
