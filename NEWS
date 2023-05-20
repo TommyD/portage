@@ -1,3 +1,37 @@
+portage-3.0.47 (2023-04-30)
+---------------
+
+Security:
+* emerge-webrsync (the standalone tool) now verifies PGP signatures, see
+  bug #597800. Note that 'sync-type = webrsync' in repos.conf already
+  handled PGP verification when configured to do so (and it is by default).
+
+* dispatch-conf: Avoid race when accessing log file (bug #903973).
+
+Features:
+* install-qa-check.d: 90gcc-warnings: Add additional code quality warnings:
+  - -Wrestrict
+  - -Wstringop-overread
+  - -Wstringop-truncation
+  - -Wformat-truncation
+  - -Wcast-function-type
+  - -Wnull-dereference
+  - -Wmain
+  - -Wimplicit-int
+  - -Wstring-compare
+* install-qa-check.d: cython-dep: Report packages that are using Cython
+  but are missing BDEPEND on it.
+
+Bug fixes:
+* econf now checks for proper end of string in "configure --help" output for
+  all options starting with "--with-", "--disable-" or "--enable-", in order
+  to pass them to configure. This follows a change in PMS (bug #815169).
+
+* All _E_*DESTTREE_ variables to renamed to __E_*DESTTREE, in order to move
+  them to the __* namespace which is reserved for the package manager.
+
+* The PVR variable includes -r0 if explicitly specified (bug #875362).
+
 portage-3.0.46 (2023-04-07)
 ---------------
 
