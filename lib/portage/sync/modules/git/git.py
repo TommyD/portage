@@ -116,6 +116,22 @@ class GitSync(NewBase):
 
         return (os.EX_OK, True)
 
+    def _gen_ceiling_string(self, path):
+        """
+        Iteratively generate a colon delimited string of all of the
+        given path's parents, for use with GIT_CEILING_DIRECTORIES
+        """
+        path = self.repo.location
+        directories = []
+
+        while True:
+            if path == "/":
+                break
+            path = os.path.dirname(path)
+            directories.append(path)
+
+        return ":".join(directories)
+
     def update(self):
         """Update existing git repository, and ignore the syncuri. We are
         going to trust the user and assume that the user is in the branch
@@ -126,6 +142,13 @@ class GitSync(NewBase):
             return (1, False)
         git_cmd_opts = ""
         quiet = self.settings.get("PORTAGE_QUIET") == "1"
+
+        # We don't want to operate with a .git outside of the given
+        # repo in any circumstances.
+        self.spawn_kwargs["env"].update(
+            {"GIT_CEILING_DIRECTORIES": self._gen_ceiling_string(self.repo.location)}
+        )
+
         if self.repo.module_specific_options.get("sync-git-env"):
             shlexed_env = shlex_split(self.repo.module_specific_options["sync-git-env"])
             env = {
@@ -148,12 +171,84 @@ class GitSync(NewBase):
 
         if self.settings.get("PORTAGE_QUIET") == "1":
             git_cmd_opts += " --quiet"
+
+        # The logic here is a bit delicate. We need to balance two things:
+        # 1. Having a robust sync mechanism which works unattended.
+        # 2. Allowing users to have the flexibility they might expect when using
+        # a git repository in repos.conf for syncing.
+        #
+        # For sync-type=git repositories, we've seen a problem in the wild
+        # where shallow clones end up "breaking themselves" especially when
+        # the origin is behing a CDN. 'git pull' might return state X,
+        # but on a subsequent pull, return state X-1. git will then (sometimes)
+        # leave orphaned untracked files in the repository. On a subsequent pull,
+        # when state >= X is returned where those files exist in the origin,
+        # git then refuses to write over them and aborts to avoid clobbering
+        # local work.
+        #
+        # To mitigate this, Portage will aggressively clobber any changes
+        # in the local directory, as its priority is to keep syncing working,
+        # by running 'git clean' and 'git reset --hard'.
+        #
+        # Portage performs this clobbering if:
+        # 1. sync-type=git
+        # 2.
+        #   - volatile=no (explicitly set to no), OR
+        #   - volatile is unset AND the repository owner is neither root or portage
+        # 3. Portage is syncing the respository (rather than e.g. auto-sync=no
+        # and never running 'emaint sync -r foo')
+        #
+        # Portage will not clobber if:
+        # 1. volatile=yes (explicitly set in the config), OR
+        # 2. volatile is unset and the repository owner is root or portage.
+        #
+        # 'volatile' refers to whether the repository is volatile and may
+        # only be safely changed by Portage itself, i.e. whether Portage
+        # should expect the user to change it or not.
+        #
+        # - volatile=yes:
+        # The repository is volatile and may be changed at any time by the user.
+        # Portage will not perform destructive operations on the repository.
+        # - volatile=no
+        # The repository is not volatile. Only Portage may modify the
+        # repository. User changes may be lost.
+        # Portage may perform destructive operations on the repository
+        # to keep sync working.
+        #
+        # References:
+        # bug #887025
+        # bug #824782
+        # https://archives.gentoo.org/gentoo-dev/message/f58a97027252458ad0a44090a2602897
+
+        # Default: Perform shallow updates (but only if the target is
+        # already a shallow repository).
+        sync_depth = 1
         if self.repo.sync_depth is not None:
-            if self.repo.sync_depth != 0:
-                git_cmd_opts += " --depth %d" % self.repo.sync_depth
+            sync_depth = self.repo.sync_depth
         else:
-            # default
-            git_cmd_opts += " --depth 1"
+            if self.repo.volatile:
+                # If sync-depth is not explicitly set by the user,
+                # then check if the target repository is already a
+                # shallow one. And do not perform a shallow update if
+                # the target repository is not shallow.
+                is_shallow_cmd = ["git", "rev-parse", "--is-shallow-repository"]
+                is_shallow_res = portage._unicode_decode(
+                    subprocess.check_output(
+                        is_shallow_cmd,
+                        cwd=portage._unicode_encode(self.repo.location),
+                    )
+                )
+                if is_shallow_res == "false":
+                    sync_depth = 0
+            else:
+                # If the repository is marked as non-volatile, we assume
+                # it's fine to Portage to do what it wishes to it.
+                sync_depth = 1
+
+        shallow = False
+        if sync_depth > 0:
+            git_cmd_opts += f" --depth {sync_depth}"
+            shallow = True
 
         if self.repo.module_specific_options.get("sync-git-pull-extra-opts"):
             git_cmd_opts += (
@@ -181,7 +276,6 @@ class GitSync(NewBase):
             writemsg_level(msg + "\n", level=logging.ERROR, noiselevel=-1)
             return (e.returncode, False)
 
-        shallow = self.repo.sync_depth is None or self.repo.sync_depth != 0
         if shallow:
             # For shallow fetch, unreachable objects may need to be pruned
             # manually, in order to prevent automatic git gc calls from
@@ -227,6 +321,29 @@ class GitSync(NewBase):
         if not self.verify_head(revision="refs/remotes/%s" % remote_branch):
             return (1, False)
 
+        if not self.repo.volatile:
+            # Clean up the repo before trying to sync to upstream.
+            # - Only done for volatile=false repositories to avoid losing
+            # data.
+            # - This is needed to avoid orphaned files preventing further syncs
+            # on shallow clones.
+            clean_cmd = [self.bin_command, "clean", "--force", "-d", "-x"]
+
+            if quiet:
+                clean_cmd.append("--quiet")
+
+            exitcode = portage.process.spawn(
+                clean_cmd,
+                cwd=portage._unicode_encode(self.repo.location),
+                **self.spawn_kwargs,
+            )
+
+            if exitcode != os.EX_OK:
+                msg = "!!! git clean error in %s" % self.repo.location
+                self.logger(self.xterm_titles, msg)
+                writemsg_level(msg + "\n", level=logging.ERROR, noiselevel=-1)
+                return (exitcode, False)
+
         # `git diff --quiet` returns 0 on a clean tree and 1 otherwise
         is_clean = (
             portage.process.spawn(
@@ -237,9 +354,9 @@ class GitSync(NewBase):
             == 0
         )
 
-        if not is_clean:
+        if not is_clean and not self.repo.volatile:
             # If the repo isn't clean, clobber any changes for parity
-            # with rsync
+            # with rsync. Only do this for non-volatile repositories.
             merge_cmd = [self.bin_command, "reset", "--hard"]
         elif shallow:
             # Since the default merge strategy typically fails when
@@ -247,16 +364,18 @@ class GitSync(NewBase):
             merge_cmd = [self.bin_command, "reset", "--merge"]
         else:
             merge_cmd = [self.bin_command, "merge"]
+
         merge_cmd.append("refs/remotes/%s" % remote_branch)
         if quiet:
             merge_cmd.append("--quiet")
+
         exitcode = portage.process.spawn(
             merge_cmd,
             cwd=portage._unicode_encode(self.repo.location),
             **self.spawn_kwargs,
         )
 
-        if exitcode != os.EX_OK:
+        if exitcode != os.EX_OK and not self.repo.volatile:
             # HACK - sometimes merging results in a tree diverged from
             # upstream, so try to hack around it
             # https://stackoverflow.com/questions/41075972/how-to-update-a-git-shallow-clone/41081908#41081908
