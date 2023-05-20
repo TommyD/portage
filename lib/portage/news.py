@@ -79,7 +79,7 @@ class NewsManager:
         portdir = portdb.repositories.mainRepoLocation()
         profiles_base = None
         if portdir is not None:
-            profiles_base = os.path.join(portdir, "profiles", os.path.sep)
+            profiles_base = os.path.join(portdir, ("profiles" + os.path.sep))
         profile_path = None
         if profiles_base is not None and portdb.settings.profile_path:
             profile_path = normalize_path(
@@ -279,11 +279,16 @@ class NewsItem:
 
         kwargs = {"vardb": vardb, "config": config, "profile": profile}
 
-        all_match = all(
-            restriction.checkRestriction(**kwargs)
-            for values in self.restrictions.values()
-            for restriction in values
-        )
+        all_match = True
+        for values in self.restrictions.values():
+            matches = [restriction.checkRestriction(**kwargs) for restriction in values]
+            any_match = any(matches)
+
+            # If, for a single restriction, we didn't match anything, then we obviously
+            # didn't match everything, so just bail out.
+            if not any_match:
+                all_match = False
+                break
 
         return all_match
 
