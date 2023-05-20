@@ -31,7 +31,7 @@ def _expand_new_virtuals(
     trees=None,
     use_mask=None,
     use_force=None,
-    **kwargs
+    **kwargs,
 ):
     """
     In order to solve bug #141118, recursively expand new-style virtuals so
@@ -78,17 +78,15 @@ def _expand_new_virtuals(
             newsplit.append(x)
             continue
         elif isinstance(x, list):
-            assert x, "Normalization error, empty conjunction found in {}".format(
-                mysplit
-            )
+            assert x, f"Normalization error, empty conjunction found in {mysplit}"
             if is_disjunction:
                 assert (
                     x[0] != "||"
-                ), "Normalization error, nested disjunction found in {}".format(mysplit)
+                ), f"Normalization error, nested disjunction found in {mysplit}"
             else:
                 assert (
                     x[0] == "||"
-                ), "Normalization error, nested conjunction found in {}".format(mysplit)
+                ), f"Normalization error, nested conjunction found in {mysplit}"
             x_exp = _expand_new_virtuals(
                 x,
                 edebug,
@@ -98,7 +96,7 @@ def _expand_new_virtuals(
                 trees=trees,
                 use_mask=use_mask,
                 use_force=use_force,
-                **kwargs
+                **kwargs,
             )
             if is_disjunction:
                 if len(x_exp) == 1:
@@ -109,9 +107,7 @@ def _expand_new_virtuals(
                         # must be a disjunction.
                         assert (
                             x and x[0] == "||"
-                        ), "Normalization error, nested conjunction found in {}".format(
-                            x_exp,
-                        )
+                        ), f"Normalization error, nested conjunction found in {x_exp}"
                         newsplit.extend(x[1:])
                     else:
                         newsplit.append(x)
@@ -305,7 +301,7 @@ def _expand_new_virtuals(
                     mysettings,
                     myroot=myroot,
                     trees=trees,
-                    **pkg_kwargs
+                    **pkg_kwargs,
                 )
             finally:
                 # Restore previous EAPI after recursion.
@@ -315,7 +311,7 @@ def _expand_new_virtuals(
                     del mytrees["virt_parent"]
 
             if not mycheck[0]:
-                raise ParseError("{}: {} '{}'".format(pkg, mycheck[1], depstring))
+                raise ParseError(f"{pkg}: {mycheck[1]} '{depstring}'")
 
             # Replace the original atom "x" with "virt_atom" which refers
             # to the specific version of the virtual whose deps we're
@@ -408,7 +404,7 @@ def dep_zapdeps(
     """
     if trees is None:
         trees = portage.db
-    writemsg("ZapDeps -- %s\n" % (use_binaries), 2)
+    writemsg(f"ZapDeps -- {use_binaries}\n", 2)
     if not reduced or unreduced == ["||"] or dep_eval(reduced):
         return []
 
@@ -534,7 +530,7 @@ def dep_zapdeps(
                 avail_pkg = [replacing]
             if avail_pkg:
                 avail_pkg = avail_pkg[-1]  # highest (ascending order)
-                avail_slot = Atom("{}:{}".format(atom.cp, avail_pkg.slot))
+                avail_slot = Atom(f"{atom.cp}:{avail_pkg.slot}")
             if not avail_pkg:
                 all_available = False
                 all_use_satisfied = False
@@ -589,7 +585,7 @@ def dep_zapdeps(
                     avail_pkg_use = avail_pkg_use[-1]
                     if avail_pkg_use != avail_pkg:
                         avail_pkg = avail_pkg_use
-                    avail_slot = Atom("{}:{}".format(atom.cp, avail_pkg.slot))
+                    avail_slot = Atom(f"{atom.cp}:{avail_pkg.slot}")
 
             if not replacing and downgrade_probe is not None and graph is not None:
                 highest_in_slot = mydbapi_match_pkgs(avail_slot)
@@ -968,7 +964,7 @@ def dep_check(
                 eapi=eapi,
             )
         except InvalidDependString as e:
-            return [0, "{}".format(e)]
+            return [0, f"{e}"]
 
     if mysplit == []:
         # dependencies were reduced to nothing
@@ -993,7 +989,7 @@ def dep_check(
             trees=trees,
         )
     except ParseError as e:
-        return [0, "{}".format(e)]
+        return [0, f"{e}"]
 
     dnf = False
     if mysettings.local_config:  # if not repoman
@@ -1006,8 +1002,8 @@ def dep_check(
         return [0, _("Invalid token")]
 
     writemsg("\n\n\n", 1)
-    writemsg("mysplit:  %s\n" % (mysplit), 1)
-    writemsg("mysplit2: %s\n" % (mysplit2), 1)
+    writemsg(f"mysplit:  {mysplit}\n", 1)
+    writemsg(f"mysplit2: {mysplit2}\n", 1)
 
     selected_atoms = dep_zapdeps(
         mysplit,
@@ -1050,7 +1046,7 @@ def _overlap_dnf(dep_struct):
         if isinstance(x, list):
             assert (
                 x and x[0] == "||"
-            ), "Normalization error, nested conjunction found in {}".format(dep_struct)
+            ), f"Normalization error, nested conjunction found in {dep_struct}"
             order_map[id(x)] = i
             prev_cp = None
             for atom in _iter_flatten(x):

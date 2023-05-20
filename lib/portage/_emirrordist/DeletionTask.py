@@ -59,9 +59,7 @@ class DeletionTask(CompositeTask):
                 os.unlink(self.distfile_path)
             except OSError as e:
                 if e.errno not in (errno.ENOENT, errno.ESTALE):
-                    logger.error(
-                        "{} unlink failed in distfiles: {}".format(self.distfile, e)
-                    )
+                    logger.error(f"{self.distfile} unlink failed in distfiles: {e}")
                     success = False
 
         if success:
@@ -85,9 +83,7 @@ class DeletionTask(CompositeTask):
                 os.unlink(copier.src_path)
             except OSError as e:
                 if e.errno not in (errno.ENOENT, errno.ESTALE):
-                    logger.error(
-                        "{} unlink failed in distfiles: {}".format(self.distfile, e)
-                    )
+                    logger.error(f"{self.distfile} unlink failed in distfiles: {e}")
                     success = False
 
         else:
@@ -118,9 +114,7 @@ class DeletionTask(CompositeTask):
                 os.unlink(distfile_path)
             except OSError as e:
                 if e.errno not in (errno.ENOENT, errno.ESTALE):
-                    logger.error(
-                        "{} unlink failed in distfiles: {}".format(self.distfile, e)
-                    )
+                    logger.error(f"{self.distfile} unlink failed in distfiles: {e}")
                     success = False
 
         if success:
@@ -136,7 +130,7 @@ class DeletionTask(CompositeTask):
             cpv = self.config.distfiles_db.get(self.distfile, cpv)
 
         self.config.delete_count += 1
-        self.config.log_success("{}\t{}\tremoved".format(cpv, self.distfile))
+        self.config.log_success(f"{cpv}\t{self.distfile}\tremoved")
 
         if self.config.distfiles_db is not None:
             try:

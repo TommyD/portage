@@ -425,13 +425,11 @@ def update_config_files(
                             # add a comment with the update command, so
                             # the user can clearly see what happened
                             contents[pos] = "# {}\n".format(
-                                " ".join("{}".format(x) for x in update_cmd)
+                                " ".join(f"{x}" for x in update_cmd)
                             )
                             contents.insert(
                                 pos + 1,
-                                line.replace(
-                                    "{}".format(atom), "{}".format(new_atom), 1
-                                ),
+                                line.replace(f"{atom}", f"{new_atom}", 1),
                             )
                             # we've inserted an additional line, so we need to
                             # skip it when it's reached in the next iteration
@@ -450,10 +448,10 @@ def update_config_files(
         try:
             write_atomic(updating_file, "".join(file_contents[x]))
         except PortageException as e:
-            writemsg("\n!!! %s\n" % str(e), noiselevel=-1)
+            writemsg(f"\n!!! {str(e)}\n", noiselevel=-1)
             writemsg(
                 _("!!! An error occurred while updating a config file:")
-                + " '%s'\n" % updating_file,
+                + f" '{updating_file}'\n",
                 noiselevel=-1,
             )
             continue

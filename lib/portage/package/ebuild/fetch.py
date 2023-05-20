@@ -370,11 +370,7 @@ def _check_distfile(filename, digests, eout, show_errors=1, hash_filter=None):
         if hash_filter is not None:
             digests = _apply_hash_filter(digests, hash_filter)
         if _check_digests(filename, digests, show_errors=show_errors):
-            eout.ebegin(
-                "{} {} ;-)".format(
-                    os.path.basename(filename), " ".join(sorted(digests))
-                )
-            )
+            eout.ebegin(f"{os.path.basename(filename)} {' '.join(sorted(digests))} ;-)")
             eout.eend(0)
         else:
             return (False, st)
@@ -675,7 +671,7 @@ class MirrorLayoutConfig:
         ret = []
         for val in self.structure:
             if not self.validate_structure(val):
-                raise ValueError("Unsupported structure: {}".format(val))
+                raise ValueError(f"Unsupported structure: {val}")
             if val[0] == "flat":
                 ret.append(FlatLayout(*val[1:]))
             elif val[0] == "filename-hash":
@@ -713,7 +709,7 @@ def get_mirror_url(mirror_url, filename, mysettings, cache_path=None):
     if ts >= time.time() - 86400:
         mirror_conf.deserialize(data)
     else:
-        tmpfile = ".layout.conf.%s" % urlparse(mirror_url).hostname
+        tmpfile = f".layout.conf.{urlparse(mirror_url).hostname}"
         try:
             if mirror_url[:1] == "/":
                 tmpfile = os.path.join(mirror_url, "layout.conf")
@@ -1093,7 +1089,7 @@ def fetch(
                     writemsg(_("!!! No known mirror by the name: %s\n") % (mirrorname))
             else:
                 writemsg(_("Invalid mirror definition in SRC_URI:\n"), noiselevel=-1)
-                writemsg("  %s\n" % (myuri), noiselevel=-1)
+                writemsg(f"  {myuri}\n", noiselevel=-1)
         else:
             if (restrict_fetch and not override_fetch) or force_mirror:
                 # Only fetch from specific mirrors is allowed.
@@ -1132,7 +1128,7 @@ def fetch(
             _ensure_distdir(mysettings, mysettings["DISTDIR"])
         except PortageException as e:
             if not os.path.isdir(mysettings["DISTDIR"]):
-                writemsg("!!! %s\n" % str(e), noiselevel=-1)
+                writemsg(f"!!! {str(e)}\n", noiselevel=-1)
                 writemsg(
                     _("!!! Directory Not Found: DISTDIR='%s'\n")
                     % mysettings["DISTDIR"],
@@ -1218,7 +1214,7 @@ def fetch(
                     vfs_stat = os.statvfs(mysettings["DISTDIR"])
                 except OSError as e:
                     writemsg_level(
-                        "!!! statvfs('{}'): {}\n".format(mysettings["DISTDIR"], e),
+                        f"!!! statvfs('{mysettings['DISTDIR']}'): {e}\n",
                         noiselevel=-1,
                         level=logging.ERROR,
                     )
@@ -1504,7 +1500,7 @@ def fetch(
                         ):
                             eout = EOutput()
                             eout.quiet = mysettings.get("PORTAGE_QUIET") == "1"
-                            eout.ebegin("{} size ;-)".format(myfile))
+                            eout.ebegin(f"{myfile} size ;-)")
                             eout.eend(0)
                             continue
                         else:
@@ -1555,9 +1551,7 @@ def fetch(
                                 if digests:
                                     digests = list(digests)
                                     digests.sort()
-                                    eout.ebegin(
-                                        "{} {} ;-)".format(myfile, " ".join(digests))
-                                    )
+                                    eout.ebegin(f"{myfile} {' '.join(digests)} ;-)")
                                     eout.eend(0)
                                 continue  # fetch any remaining files
 
@@ -1736,7 +1730,7 @@ def fetch(
                     try:
                         variables["DIGESTS"] = " ".join(
                             [
-                                "{}:{}".format(k.lower(), v)
+                                f"{k.lower()}:{v}"
                                 for k, v in mydigests[myfile].items()
                                 if k != "size"
                             ]
@@ -1947,8 +1941,7 @@ def fetch(
                                     )
                                     if digests:
                                         eout.ebegin(
-                                            "%s %s ;-)"
-                                            % (myfile, " ".join(sorted(digests)))
+                                            f"{myfile} {' '.join(sorted(digests))} ;-)"
                                         )
                                         eout.eend(0)
                                     fetched = 2

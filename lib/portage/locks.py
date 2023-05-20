@@ -342,9 +342,7 @@ def _lockfile_iteration(
                                     _("Error while waiting " "to lock '%s'")
                                     % lockfilename
                                 )
-                            writemsg(
-                                "\n!!! {}: {}\n".format(context_desc, e), noiselevel=-1
-                            )
+                            writemsg(f"\n!!! {context_desc}: {e}\n", noiselevel=-1)
 
                         time.sleep(_HARDLINK_POLL_LATENCY)
                         continue
@@ -625,7 +623,7 @@ def hardlink_lockfile(
         if e.errno in (errno.ENOENT, errno.ESTALE):
             pass
         else:
-            func_call = "unlink('%s')" % myhardlock
+            func_call = f"unlink('{myhardlock}')"
             if e.errno == OperationNotPermitted.errno:
                 raise OperationNotPermitted(func_call)
             elif e.errno == PermissionDenied.errno:
@@ -638,7 +636,7 @@ def hardlink_lockfile(
         try:
             myfd = os.open(lockfilename, os.O_CREAT | os.O_RDWR, 0o660)
         except OSError as e:
-            func_call = "open('%s')" % lockfilename
+            func_call = f"open('{lockfilename}')"
             if e.errno == OperationNotPermitted.errno:
                 raise OperationNotPermitted(func_call)
             elif e.errno == PermissionDenied.errno:
@@ -686,7 +684,7 @@ def hardlink_lockfile(
                 try:
                     os.link(lockfilename, myhardlock)
                 except OSError as e:
-                    func_call = "link('{}', '{}')".format(lockfilename, myhardlock)
+                    func_call = f"link('{lockfilename}', '{myhardlock}')"
                     if e.errno == OperationNotPermitted.errno:
                         raise OperationNotPermitted(func_call)
                     elif e.errno == PermissionDenied.errno:

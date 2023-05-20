@@ -84,14 +84,12 @@ if _fd_dir is not None:
                     raise
                 return range(max_fd_limit)
 
-elif os.path.isdir("/proc/%s/fd" % portage.getpid()):
+elif os.path.isdir(f"/proc/{portage.getpid()}/fd"):
     # In order for this function to work in forked subprocesses,
     # os.getpid() must be called from inside the function.
     def get_open_fds():
         return (
-            int(fd)
-            for fd in os.listdir("/proc/%s/fd" % portage.getpid())
-            if fd.isdigit()
+            int(fd) for fd in os.listdir(f"/proc/{portage.getpid()}/fd") if fd.isdigit()
         )
 
 else:
@@ -439,10 +437,39 @@ def spawn(
             except SystemExit:
                 raise
             except Exception as e:
+                if isinstance(e, OSError) and e.errno == errno.E2BIG:
+                    # If exec() failed with E2BIG, then this is
+                    # potentially because the environment variables
+                    # grew to large. The following will gather some
+                    # stats about the environment and print a
+                    # diagnostic message to help identifying the
+                    # culprit. See also
+                    # - https://bugs.gentoo.org/721088
+                    # - https://bugs.gentoo.org/830187
+                    def encoded_length(s):
+                        return len(os.fsencode(s))
+
+                    env_size = 0
+                    env_largest_name = None
+                    env_largest_size = 0
+                    for env_name, env_value in env.items():
+                        env_name_size = encoded_length(env_name)
+                        env_value_size = encoded_length(env_value)
+                        # Add two for '=' and the terminating null byte.
+                        total_size = env_name_size + env_value_size + 2
+                        if total_size > env_largest_size:
+                            env_largest_name = env_name
+                            env_largest_size = total_size
+                        env_size += total_size
+
+                    writemsg(
+                        f"ERROR: Executing {mycommand} failed with E2BIG. Child process environment size: {env_size} bytes. Largest environment variable: {env_largest_name} ({env_largest_size} bytes)\n"
+                    )
+
                 # We need to catch _any_ exception so that it doesn't
                 # propagate out of this function and cause exiting
                 # with anything other than os._exit()
-                writemsg("{}:\n   {}\n".format(e, " ".join(mycommand)), noiselevel=-1)
+                writemsg(f"{e}:\n   {' '.join(mycommand)}\n", noiselevel=-1)
                 traceback.print_exc()
                 sys.stderr.flush()
 
@@ -458,7 +485,7 @@ def spawn(
             os._exit(1)
 
     if not isinstance(pid, int):
-        raise AssertionError("fork returned non-integer: {}".format(repr(pid)))
+        raise AssertionError(f"fork returned non-integer: {repr(pid)}")
 
     # Add the pid to our local and the global pid lists.
     mypids.append(pid)
@@ -574,7 +601,7 @@ def _configure_loopback_interface():
                 rtnl.add_address(ifindex, socket.AF_INET6, "fd::1", 8)
     except OSError as e:
         writemsg(
-            "Unable to configure loopback interface: %s\n" % e.strerror, noiselevel=-1
+            f"Unable to configure loopback interface: {e.strerror}\n", noiselevel=-1
         )
 
 

@@ -149,9 +149,9 @@ def movefile(
         raise
     except Exception as e:
         writemsg(
-            "!!! %s\n" % _("Stating source file failed... movefile()"), noiselevel=-1
+            f"!!! {_('Stating source file failed... movefile()')}\n", noiselevel=-1
         )
-        writemsg("!!! {}\n".format(e), noiselevel=-1)
+        writemsg(f"!!! {e}\n", noiselevel=-1)
         return None
 
     destexists = 1
@@ -232,11 +232,9 @@ def movefile(
         except SystemExit as e:
             raise
         except Exception as e:
-            writemsg(
-                "!!! %s\n" % _("failed to properly create symlink:"), noiselevel=-1
-            )
-            writemsg("!!! {} -> {}\n".format(dest, target), noiselevel=-1)
-            writemsg("!!! {}\n".format(e), noiselevel=-1)
+            writemsg(f"!!! {_('failed to properly create symlink:')}\n", noiselevel=-1)
+            writemsg(f"!!! {dest} -> {target}\n", noiselevel=-1)
+            writemsg(f"!!! {e}\n", noiselevel=-1)
             return None
 
     hardlinked = False
@@ -246,9 +244,7 @@ def movefile(
     # and them use os.rename() to replace the destination.
     if hardlink_candidates:
         head, tail = os.path.split(dest)
-        hardlink_tmp = os.path.join(
-            head, ".{}._portage_merge_.{}".format(tail, portage.getpid())
-        )
+        hardlink_tmp = os.path.join(head, f".{tail}._portage_merge_.{portage.getpid()}")
         try:
             os.unlink(hardlink_tmp)
         except OSError as e:
@@ -258,7 +254,7 @@ def movefile(
                     % (hardlink_tmp,),
                     noiselevel=-1,
                 )
-                writemsg("!!! {}\n".format(e), noiselevel=-1)
+                writemsg(f"!!! {e}\n", noiselevel=-1)
                 return None
             del e
         for hardlink_src in hardlink_candidates:
@@ -274,7 +270,7 @@ def movefile(
                         _("!!! Failed to rename %s to %s\n") % (hardlink_tmp, dest),
                         noiselevel=-1,
                     )
-                    writemsg("!!! {}\n".format(e), noiselevel=-1)
+                    writemsg(f"!!! {e}\n", noiselevel=-1)
                     return None
                 hardlinked = True
                 try:
@@ -297,12 +293,11 @@ def movefile(
             if e.errno != errno.EXDEV:
                 # Some random error.
                 writemsg(
-                    "!!! %s\n"
-                    % _("Failed to move %(src)s to %(dest)s")
+                    f"!!! {_('Failed to move %(src)s to %(dest)s')}\n"
                     % {"src": src, "dest": dest},
                     noiselevel=-1,
                 )
-                writemsg("!!! {}\n".format(e), noiselevel=-1)
+                writemsg(f"!!! {e}\n", noiselevel=-1)
                 return None
             # Invalid cross-device-link 'bind' mounted or actually Cross-Device
     if renamefailed:
@@ -332,19 +327,18 @@ def movefile(
                         )
                         msg = textwrap.wrap(msg, 65)
                         for line in msg:
-                            writemsg("!!! {}\n".format(line), noiselevel=-1)
+                            writemsg(f"!!! {line}\n", noiselevel=-1)
                         raise
                 _rename(dest_tmp_bytes, dest_bytes)
                 _os.unlink(src_bytes)
                 success = True
             except Exception as e:
                 writemsg(
-                    "!!! %s\n"
-                    % _("copy %(src)s -> %(dest)s failed.")
+                    f"!!! {_('copy %(src)s -> %(dest)s failed.')}\n"
                     % {"src": src, "dest": dest},
                     noiselevel=-1,
                 )
-                writemsg("!!! {}\n".format(e), noiselevel=-1)
+                writemsg(f"!!! {e}\n", noiselevel=-1)
                 return None
             finally:
                 if not success:
@@ -365,7 +359,7 @@ def movefile(
                     },
                     noiselevel=-1,
                 )
-                writemsg("!!! %s\n" % a, noiselevel=-1)
+                writemsg(f"!!! {a}\n", noiselevel=-1)
                 return None  # failure
 
     # In Python <3.3 always use stat_obj[stat.ST_MTIME] for the integral timestamp
@@ -395,8 +389,8 @@ def movefile(
             newmtime = os.stat(dest).st_mtime_ns
         except OSError as e:
             writemsg(_("!!! Failed to stat in movefile()\n"), noiselevel=-1)
-            writemsg("!!! %s\n" % dest, noiselevel=-1)
-            writemsg("!!! %s\n" % str(e), noiselevel=-1)
+            writemsg(f"!!! {dest}\n", noiselevel=-1)
+            writemsg(f"!!! {str(e)}\n", noiselevel=-1)
             return None
 
     if bsd_chflags:

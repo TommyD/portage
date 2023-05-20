@@ -14,11 +14,9 @@ class TestEAPI7VerFuncs(TestCase):
         Test that commands in test_cases produce expected output.
         """
         with tempfile.NamedTemporaryFile("w") as test_script:
-            test_script.write(
-                'source "{}"/eapi7-ver-funcs.sh\n'.format(PORTAGE_BIN_PATH)
-            )
+            test_script.write(f'source "{PORTAGE_BIN_PATH}"/eapi7-ver-funcs.sh\n')
             for cmd, exp in test_cases:
-                test_script.write("{}\n".format(cmd))
+                test_script.write(f"{cmd}\n")
             test_script.flush()
 
             s = subprocess.Popen(
@@ -31,20 +29,16 @@ class TestEAPI7VerFuncs(TestCase):
 
             for test_case, result in zip(test_cases, sout.decode().splitlines()):
                 cmd, exp = test_case
-                self.assertEqual(
-                    result, exp, "{} -> {}; expected: {}".format(cmd, result, exp)
-                )
+                self.assertEqual(result, exp, f"{cmd} -> {result}; expected: {exp}")
 
     def _test_return(self, test_cases):
         """
         Test that commands in test_cases give appropriate exit codes.
         """
         with tempfile.NamedTemporaryFile("w+") as test_script:
-            test_script.write(
-                'source "{}"/eapi7-ver-funcs.sh\n'.format(PORTAGE_BIN_PATH)
-            )
+            test_script.write(f'source "{PORTAGE_BIN_PATH}"/eapi7-ver-funcs.sh\n')
             for cmd, exp in test_cases:
-                test_script.write("{}; echo $?\n".format(cmd))
+                test_script.write(f"{cmd}; echo $?\n")
             test_script.flush()
 
             s = subprocess.Popen(
@@ -57,9 +51,7 @@ class TestEAPI7VerFuncs(TestCase):
 
             for test_case, result in zip(test_cases, sout.decode().splitlines()):
                 cmd, exp = test_case
-                self.assertEqual(
-                    result, exp, "{} -> {}; expected: {}".format(cmd, result, exp)
-                )
+                self.assertEqual(result, exp, f"{cmd} -> {result}; expected: {exp}")
 
     def _test_fail(self, test_cases):
         """
@@ -67,13 +59,10 @@ class TestEAPI7VerFuncs(TestCase):
         """
 
         for cmd in test_cases:
-            test = """
-source "{}"/eapi7-ver-funcs.sh
+            test = f"""
+source "{PORTAGE_BIN_PATH}"/eapi7-ver-funcs.sh
 die() {{ exit 1; }}
-{}""".format(
-                PORTAGE_BIN_PATH,
-                cmd,
-            )
+{cmd}"""
 
             s = subprocess.Popen(
                 ["bash", "-c", test], stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -82,8 +71,7 @@ die() {{ exit 1; }}
             self.assertEqual(
                 s.returncode,
                 1,
-                '"%s" did not fail; output: %s; %s)'
-                % (cmd, sout.decode(), serr.decode()),
+                f'"{cmd}" did not fail; output: {sout.decode()}; {serr.decode()})',
             )
 
     def test_ver_cut(self):
