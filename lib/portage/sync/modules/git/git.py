@@ -169,7 +169,7 @@ class GitSync(NewBase):
             }
             self.spawn_kwargs["env"].update(pull_env)
 
-        if self.settings.get("PORTAGE_QUIET") == "1":
+        if quiet:
             git_cmd_opts += " --quiet"
 
         # The logic here is a bit delicate. We need to balance two things:
@@ -194,13 +194,14 @@ class GitSync(NewBase):
         # 1. sync-type=git
         # 2.
         #   - volatile=no (explicitly set to no), OR
-        #   - volatile is unset AND the repository owner is neither root or portage
+        #   - volatile is unset AND the repository owner is either root or portage
         # 3. Portage is syncing the respository (rather than e.g. auto-sync=no
         # and never running 'emaint sync -r foo')
         #
         # Portage will not clobber if:
         # 1. volatile=yes (explicitly set in the config), OR
-        # 2. volatile is unset and the repository owner is root or portage.
+        # 2. volatile is unset and the repository owner is neither root nor
+        #    portage.
         #
         # 'volatile' refers to whether the repository is volatile and may
         # only be safely changed by Portage itself, i.e. whether Portage
@@ -300,7 +301,8 @@ class GitSync(NewBase):
             git_cmd_opts,
         )
 
-        writemsg_level(git_cmd + "\n")
+        if not quiet:
+            writemsg_level(git_cmd + "\n")
 
         rev_cmd = [self.bin_command, "rev-list", "--max-count=1", "HEAD"]
         previous_rev = subprocess.check_output(
@@ -369,21 +371,25 @@ class GitSync(NewBase):
         if quiet:
             merge_cmd.append("--quiet")
 
+        if not quiet:
+            writemsg_level(" ".join(merge_cmd) + "\n")
+
         exitcode = portage.process.spawn(
             merge_cmd,
             cwd=portage._unicode_encode(self.repo.location),
             **self.spawn_kwargs,
         )
 
-        if exitcode != os.EX_OK and not self.repo.volatile:
-            # HACK - sometimes merging results in a tree diverged from
-            # upstream, so try to hack around it
-            # https://stackoverflow.com/questions/41075972/how-to-update-a-git-shallow-clone/41081908#41081908
-            exitcode = portage.process.spawn(
-                f"{self.bin_command} reset --hard refs/remotes/{remote_branch}",
-                cwd=portage._unicode_encode(self.repo.location),
-                **self.spawn_kwargs,
-            )
+        if exitcode != os.EX_OK:
+            if not self.repo.volatile:
+                # HACK - sometimes merging results in a tree diverged from
+                # upstream, so try to hack around it
+                # https://stackoverflow.com/questions/41075972/how-to-update-a-git-shallow-clone/41081908#41081908
+                exitcode = portage.process.spawn(
+                    f"{self.bin_command} reset --hard refs/remotes/{remote_branch}",
+                    cwd=portage._unicode_encode(self.repo.location),
+                    **self.spawn_kwargs,
+                )
 
             if exitcode != os.EX_OK:
                 msg = f"!!! git merge error in {self.repo.location}"

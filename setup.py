@@ -788,7 +788,6 @@ def venv_data_files(locations):
 
         abs_source_path = os.path.abspath(source_path)
         for root, dirs, files in os.walk(abs_source_path):
-
             root_offset = root[len(abs_source_path) :].lstrip("/")
             dest_path = os.path.join(dest_prefix, root_offset)
 
@@ -818,7 +817,7 @@ def get_data_files(regular_files, venv_files):
 
 setup(
     name="portage",
-    version="3.0.44",
+    version="3.0.45",
     url="https://wiki.gentoo.org/wiki/Project:Portage",
     project_urls={
         "Release Notes": "https://gitweb.gentoo.org/proj/portage.git/plain/NEWS",

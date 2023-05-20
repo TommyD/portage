@@ -16,7 +16,6 @@ from portage.output import colorize
 
 class MoveEntTestCase(TestCase):
     def testMoveEnt(self):
-
         ebuilds = {
             "dev-libs/A-2::dont_apply_updates": {
                 "EAPI": "4",
@@ -59,7 +58,10 @@ class MoveEntTestCase(TestCase):
                     ebuilds=ebuilds,
                     installed=installed,
                     user_config={
-                        "make.conf": (f'BINPKG_FORMAT="{binpkg_format}"',),
+                        "make.conf": (
+                            f'BINPKG_FORMAT="{binpkg_format}"',
+                            'FEATURES="-binpkg-signing"',
+                        ),
                     },
                 )
 

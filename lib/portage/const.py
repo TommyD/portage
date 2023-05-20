@@ -1,5 +1,5 @@
 # portage: Constants
-# Copyright 1998-2021 Gentoo Authors
+# Copyright 1998-2023 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 import os
@@ -158,7 +158,6 @@ SUPPORTED_FEATURES = frozenset(
         "fixlafiles",
         "force-mirror",
         "force-multilib",
-        "force-prefix",
         "getbinpkg",
         "gpg-keepalive",
         "icecream",

@@ -1,4 +1,4 @@
-# Copyright 2010-2021 Gentoo Authors
+# Copyright 2010-2023 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 __all__ = [
@@ -1102,7 +1102,6 @@ class config:
             except OSError:
                 pass
             else:
-
                 if portage.data._unprivileged_mode(eroot_or_parent, eroot_st):
                     unprivileged = True
 
@@ -1679,7 +1678,6 @@ class config:
         self.regenerate()
 
     class _lazy_vars:
-
         __slots__ = ("built_use", "settings", "values")
 
         def __init__(self, built_use, settings):
@@ -2809,10 +2807,8 @@ class config:
 
         myflags = set()
         for mykey, incremental_list in increment_lists.items():
-
             myflags.clear()
             for mysplit in incremental_list:
-
                 for x in mysplit:
                     if x == "-*":
                         # "-*" is a special "minus" var that means "unset all settings".
@@ -2912,7 +2908,6 @@ class config:
             iuse = [x.lstrip("+-") for x in iuse.split()]
         myflags = set()
         for curdb in self.uvlist:
-
             for k in use_expand_unprefixed:
                 v = curdb.get(k)
                 if v is None:
@@ -3168,7 +3163,6 @@ class config:
                 return ""
 
     def _getitem(self, mykey):
-
         if mykey in self._constant_keys:
             # These two point to temporary values when
             # portage plans to update itself.
@@ -3361,14 +3355,9 @@ class config:
         if not (src_like_phase and eapi_attrs.broot):
             mydict.pop("BROOT", None)
 
-        # Prefix variables are supported beginning with EAPI 3, or when
-        # force-prefix is in FEATURES, since older EAPIs would otherwise be
-        # useless with prefix configurations. This brings compatibility with
-        # the prefix branch of portage, which also supports EPREFIX for all
-        # EAPIs (for obvious reasons).
         if phase == "depend" or (
-            "force-prefix" not in self.features
-            and eapi is not None
+            # Prefix variables are supported beginning with EAPI 3.
+            eapi is not None
             and not eapi_supports_prefix(eapi)
         ):
             mydict.pop("ED", None)
