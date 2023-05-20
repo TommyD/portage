@@ -1,6 +1,26 @@
 # Copyright 2004-2020 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
+from portage.cache.mappings import UserDict
+from portage.proxy.objectproxy import ObjectProxy
+from portage.localization import _
+from portage.exception import (
+    InvalidAtom,
+    PortageException,
+    FileNotFound,
+    IsADirectory,
+    OperationNotPermitted,
+    ParseError,
+    PermissionDenied,
+    ReadOnlyFileSystem,
+)
+from portage.const import VCS_DIRS
+from portage import _unicode_decode
+from portage import _unicode_encode
+from portage import _os_merge
+from portage import _encodings
+from portage import os
+
 __all__ = [
     "apply_permissions",
     "apply_recursive_permissions",
@@ -36,6 +56,7 @@ __all__ = [
     "writemsg",
     "writemsg_level",
     "writemsg_stdout",
+    "no_color",
 ]
 
 from contextlib import AbstractContextManager
@@ -51,6 +72,7 @@ import string
 import sys
 import traceback
 import glob
+from typing import Optional
 
 import portage
 
@@ -60,26 +82,6 @@ portage.proxy.lazyimport.lazyimport(
     "portage.dep:Atom",
     "subprocess",
 )
-
-from portage import os
-from portage import _encodings
-from portage import _os_merge
-from portage import _unicode_encode
-from portage import _unicode_decode
-from portage.const import VCS_DIRS
-from portage.exception import (
-    InvalidAtom,
-    PortageException,
-    FileNotFound,
-    IsADirectory,
-    OperationNotPermitted,
-    ParseError,
-    PermissionDenied,
-    ReadOnlyFileSystem,
-)
-from portage.localization import _
-from portage.proxy.objectproxy import ObjectProxy
-from portage.cache.mappings import UserDict
 
 
 noiselimit = 0
@@ -142,7 +144,7 @@ def writemsg_level(msg, level=0, noiselevel=0):
     writemsg(msg, noiselevel=noiselevel, fd=fd)
 
 
-def normalize_path(mypath):
+def normalize_path(mypath) -> str:
     """
     os.path.normpath("//foo") returns "//foo" instead of "/foo"
     We dislike this behavior so we create our own normpath func
@@ -2006,3 +2008,12 @@ def getlibpaths(root, env=None):
     rval.append("/lib")
 
     return [normalize_path(x) for x in rval if x]
+
+
+def no_color(settings: Optional[dict]) -> bool:
+    # In several years (2026+), we can cleanup NOCOLOR support, and just support NO_COLOR.
+    has_color: str = settings.get("NO_COLOR")
+    nocolor: str = settings.get("NOCOLOR", "false").lower()
+    if has_color is None:
+        return nocolor in ("yes", "true")
+    return bool(has_color)
