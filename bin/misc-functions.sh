@@ -87,6 +87,7 @@ install_qa_check() {
 		local EPREFIX= ED=${D}
 	fi
 
+	[[ -e "${D}" ]] || return
 	cd "${D}" || die "cd failed"
 
 	# Collect the paths for QA checks, highest prio first.
