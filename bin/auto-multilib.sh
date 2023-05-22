@@ -281,17 +281,6 @@ _finalize_abi_install() {
 			ln -s  i686-pc-linux-gnu-llvm-config "${D}"/usr/lib/llvm/"${PV//.*}"/bin/llvm-config-x86
 		fi
 	fi
-	if [[ "${PN}" == "libgpg-error" ]] ; then
-		if [[ ${ABI} == ${first_installed_abi} ]] ; then
-			mv "${D}"/usr/bin/x86_64-pc-linux-gnu-gpg-error-config-amd64 "${D}"/usr/bin/gpg-error-config-amd64 || die
-			rm "${D}"/usr/bin/{x86_64-pc-linux-gnu-gpg-error-config,gpg-error-config} || die
-			ln -s /bin/abi-wrapper "${D}"/usr/bin/gpg-error-config || die
-			ln -s gpg-error-config "${D}"/usr/bin/x86_64-pc-linux-gnu-gpg-error-config || die
-		else
-			mv "${D}"/usr/bin/i686-pc-linux-gnu-gpg-error-config-x86 "${D}"/usr/bin/gpg-error-config-x86 || die
-			ln -s gpg-error-config "${D}"/usr/bin/i686-pc-linux-gnu-gpg-error-config || die
-		fi
-	fi
 
 	local noabi=()
 	for i in ${MULTILIB_ABIS}; do
