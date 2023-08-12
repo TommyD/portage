@@ -731,8 +731,7 @@ def find_packages():
 def find_scripts():
     for dirpath, _dirnames, filenames in os.walk("bin"):
         for f in filenames:
-            if f not in ["deprecated-path"]:
-                yield os.path.join(dirpath, f)
+            yield os.path.join(dirpath, f)
 
 
 def get_manpages():
@@ -817,7 +816,7 @@ def get_data_files(regular_files, venv_files):
 
 setup(
     name="portage",
-    version="3.0.47",
+    version="3.0.48",
     url="https://wiki.gentoo.org/wiki/Project:Portage",
     project_urls={
         "Release Notes": "https://gitweb.gentoo.org/proj/portage.git/plain/NEWS",
@@ -844,7 +843,6 @@ setup(
             ],
             ["$portage_setsdir", ["cnf/sets/portage.conf"]],
             ["$docdir", ["NEWS", "RELEASE-NOTES"]],
-            ["$portage_base/bin", ["bin/deprecated-path"]],
             ["$portage_confdir/repo.postsync.d", ["cnf/repo.postsync.d/example"]],
         ],
         [

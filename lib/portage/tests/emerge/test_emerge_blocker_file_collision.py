@@ -1,4 +1,4 @@
-# Copyright 2016 Gentoo Foundation
+# Copyright 2016, 2023 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 
 import subprocess
@@ -121,6 +121,8 @@ src_install() {
             "PORTAGE_REPOSITORIES": settings.repositories.config_string(),
             "PYTHONDONTWRITEBYTECODE": os.environ.get("PYTHONDONTWRITEBYTECODE", ""),
             "PYTHONPATH": pythonpath,
+            "PORTAGE_INST_GID": str(os.getgid()),
+            "PORTAGE_INST_UID": str(os.getuid()),
         }
 
         if "__PORTAGE_TEST_HARDLINK_LOCKS" in os.environ:

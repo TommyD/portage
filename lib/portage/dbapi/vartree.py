@@ -32,7 +32,7 @@ portage.proxy.lazyimport.lazyimport(
     "portage.util.env_update:env_update",
     "portage.util.install_mask:install_mask_dir,InstallMask,_raise_exc",
     "portage.util.listdir:dircache,listdir",
-    "portage.util.movefile:movefile",
+    "portage.util.movefile:movefile,_cmpxattr",
     "portage.util.path:first_existing,iter_parents",
     "portage.util.writeable_check:get_ro_checker",
     "portage.util._xattr:xattr",
@@ -93,6 +93,7 @@ from ._ContentsCaseSensitivityManager import ContentsCaseSensitivityManager
 
 import argparse
 import errno
+import filecmp
 import fnmatch
 import functools
 import gc
@@ -5543,6 +5544,8 @@ class dblink:
                     destmd5,
                     mydest_link,
                 )
+                if protected and moveme:
+                    mydmode = None
 
             zing = "!!!"
             if not moveme:
@@ -5583,6 +5586,7 @@ class dblink:
                         msg.append("")
                         self._eerror("preinst", msg)
                         mydest = newdest
+                        mydmode = None
 
                 # if secondhand is None it means we're operating in "force" mode and should not create a second hand.
                 if (secondhand is not None) and (not os.path.exists(myrealto)):
@@ -5796,32 +5800,43 @@ class dblink:
                     msg.append("")
                     self._eerror("preinst", msg)
                     mydest = newdest
+                    mydmode = None
 
                 # whether config protection or not, we merge the new file the
                 # same way.  Unless moveme=0 (blocking directory)
                 if moveme:
-                    # Create hardlinks only for source files that already exist
-                    # as hardlinks (having identical st_dev and st_ino).
-                    hardlink_key = (mystat.st_dev, mystat.st_ino)
+                    # only replace the existing file if it differs, see #722270
+                    if self._needs_move(mysrc, mydest, mymode, mydmode):
+                        # Create hardlinks only for source files that already exist
+                        # as hardlinks (having identical st_dev and st_ino).
+                        hardlink_key = (mystat.st_dev, mystat.st_ino)
 
-                    hardlink_candidates = self._hardlink_merge_map.get(hardlink_key)
-                    if hardlink_candidates is None:
-                        hardlink_candidates = []
-                        self._hardlink_merge_map[hardlink_key] = hardlink_candidates
+                        hardlink_candidates = self._hardlink_merge_map.get(hardlink_key)
+                        if hardlink_candidates is None:
+                            hardlink_candidates = []
+                            self._hardlink_merge_map[hardlink_key] = hardlink_candidates
 
-                    mymtime = movefile(
-                        mysrc,
-                        mydest,
-                        newmtime=thismtime,
-                        sstat=mystat,
-                        mysettings=self.settings,
-                        hardlink_candidates=hardlink_candidates,
-                        encoding=_encodings["merge"],
-                    )
-                    if mymtime is None:
-                        return 1
-                    hardlink_candidates.append(mydest)
-                    zing = ">>>"
+                        mymtime = movefile(
+                            mysrc,
+                            mydest,
+                            newmtime=thismtime,
+                            sstat=mystat,
+                            mysettings=self.settings,
+                            hardlink_candidates=hardlink_candidates,
+                            encoding=_encodings["merge"],
+                        )
+                        if mymtime is None:
+                            return 1
+                        hardlink_candidates.append(mydest)
+                        zing = ">>>"
+                    else:
+                        mymtime = thismtime if thismtime is not None else mymtime
+                        try:
+                            os.utime(mydest, ns=(mymtime, mymtime))
+                        except OSError:
+                            # utime can fail here with EPERM
+                            pass
+                        zing = "==="
 
                     try:
                         self._merged_path(mydest, os.lstat(mydest))
@@ -6246,6 +6261,24 @@ class dblink:
 
         finally:
             self.unlockdb()
+
+    def _needs_move(self, mysrc, mydest, mymode, mydmode):
+        """
+        Checks whether the given file at |mysrc| needs to be moved to |mydest| or if
+        they are identical.
+
+        Takes file mode and extended attributes into account.
+        Should only be used for regular files.
+        """
+        if mydmode is None or not stat.S_ISREG(mydmode) or mymode != mydmode:
+            return True
+
+        if "xattr" in self.settings.features:
+            excluded_xattrs = self.settings.get("PORTAGE_XATTR_EXCLUDE", "")
+            if not _cmpxattr(mysrc, mydest, exclude=excluded_xattrs):
+                return True
+
+        return not filecmp.cmp(mysrc, mydest, shallow=False)
 
 
 def merge(

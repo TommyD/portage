@@ -1,4 +1,4 @@
-# Copyright 2011-2021 Gentoo Authors
+# Copyright 2011-2021, 2023 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 import argparse
@@ -620,8 +620,8 @@ call_has_and_best_version() {
             "INFOPATH": "",
             "PATH": path,
             "PKGDIR": pkgdir,
-            "PORTAGE_INST_GID": str(portage.data.portage_gid),
-            "PORTAGE_INST_UID": str(portage.data.portage_uid),
+            "PORTAGE_INST_GID": str(os.getgid()),  # str(portage.data.portage_gid),
+            "PORTAGE_INST_UID": str(os.getuid()),  # str(portage.data.portage_uid),
             "PORTAGE_PYTHON": portage_python,
             "PORTAGE_REPOSITORIES": settings.repositories.config_string(),
             "PORTAGE_TMPDIR": portage_tmpdir,

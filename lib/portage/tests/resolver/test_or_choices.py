@@ -1,7 +1,9 @@
-# Copyright 2013-2020 Gentoo Authors
+# Copyright 2013-2020, 2023 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 import itertools
+
+import pytest
 
 from portage.tests import TestCase
 from portage.tests.resolver.ResolverPlayground import (
@@ -637,6 +639,7 @@ class OrChoicesTestCase(TestCase):
 
 
 class OrChoicesLibpostprocTestCase(TestCase):
+    @pytest.mark.xfail(reason="Irrelevant blocker conflict")
     def testOrChoicesLibpostproc(self):
         # This test case is expected to fail after the fix for bug 706278,
         # since the "undesirable" slot upgrade which triggers a blocker conflict

@@ -1,4 +1,4 @@
-# Copyright 2012-2019 Gentoo Authors
+# Copyright 2012-2019, 2023 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 import subprocess
@@ -129,6 +129,8 @@ class SlotAbiEmergeTestCase(TestCase):
             "PORTAGE_REPOSITORIES": settings.repositories.config_string(),
             "PYTHONDONTWRITEBYTECODE": os.environ.get("PYTHONDONTWRITEBYTECODE", ""),
             "PYTHONPATH": pythonpath,
+            "PORTAGE_INST_GID": str(os.getgid()),
+            "PORTAGE_INST_UID": str(os.getuid()),
         }
 
         if "__PORTAGE_TEST_HARDLINK_LOCKS" in os.environ:
