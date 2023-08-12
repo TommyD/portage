@@ -100,6 +100,9 @@ from _emerge.resolver.slot_collision import slot_conflict_handler
 from _emerge.resolver.circular_dependency import circular_dependency_handler
 from _emerge.resolver.output import Display, format_unmatched_atom
 
+# Type annotation imports
+from typing import Any, Optional, Dict, List, Tuple, Union
+
 # Exposes a depgraph interface to dep_check.
 _dep_check_graph_interface = collections.namedtuple(
     "_dep_check_graph_interface",
@@ -2226,7 +2229,7 @@ class depgraph:
                 if parent in built_slot_operator_parents:
                     if hasattr(atom, "_orig_atom"):
                         # If atom is the result of virtual expansion, then
-                        # derefrence it to _orig_atom so that it will be correctly
+                        # dereference it to _orig_atom so that it will be correctly
                         # handled as a built slot operator dependency when
                         # appropriate (see bug 764764).
                         atom = atom._orig_atom
@@ -4041,6 +4044,16 @@ class depgraph:
                         inst_pkg, modified_use=self._pkg_use_enabled(inst_pkg)
                     )
                 ]
+                # Do not allow slotted deps to be satisfied by wrong slots.
+                # Otherwise, slot-operator-dependent packages may rebuild
+                # before the slotted package they are dependent on.
+                if child and atom.slot_operator == "=":
+                    inst_pkgs = [
+                        inst_pkg
+                        for inst_pkg in inst_pkgs
+                        if inst_pkg.slot == child.slot
+                        and inst_pkg.sub_slot == child.sub_slot
+                    ]
                 if inst_pkgs:
                     for inst_pkg in inst_pkgs:
                         if self._pkg_visibility_check(inst_pkg):
@@ -4160,6 +4173,14 @@ class depgraph:
                             inst_pkg, modified_use=self._pkg_use_enabled(inst_pkg)
                         )
                     ]
+                    # Do not allow slotted deps to be satisfied by wrong slots.
+                    if child and atom.slot_operator == "=":
+                        inst_pkgs = [
+                            inst_pkg
+                            for inst_pkg in inst_pkgs
+                            if inst_pkg.slot == child.slot
+                            and inst_pkg.sub_slot == child.sub_slot
+                        ]
                     if inst_pkgs:
                         for inst_pkg in inst_pkgs:
                             if self._pkg_visibility_check(inst_pkg):
@@ -11385,8 +11406,17 @@ def _spinner_stop(spinner):
     portage.writemsg_stdout(f"Dependency resolution took {darkgreen(time_fmt)} s.\n\n")
 
 
-def backtrack_depgraph(settings, trees, myopts, myparams, myaction, myfiles, spinner):
+def backtrack_depgraph(
+    settings: portage.package.ebuild.config.config,
+    trees: portage._trees_dict,
+    myopts: Dict[str, Any],
+    myparams: Dict[str, Union[int, str, bool]],
+    myaction: Optional[str],
+    myfiles: List[str],
+    spinner: "_emerge.stdout_spinner.stdout_spinner",
+) -> Tuple[Any, depgraph, List[str]]:
     """
+
     Raises PackageSetNotFound if myfiles contains a missing package set.
     """
     _spinner_start(spinner, myopts)
@@ -11398,7 +11428,15 @@ def backtrack_depgraph(settings, trees, myopts, myparams, myaction, myfiles, spi
         _spinner_stop(spinner)
 
 
-def _backtrack_depgraph(settings, trees, myopts, myparams, myaction, myfiles, spinner):
+def _backtrack_depgraph(
+    settings: portage.package.ebuild.config.config,
+    trees: portage._trees_dict,
+    myopts: Dict[str, Any],
+    myparams: Dict[str, Union[int, str, bool]],
+    myaction: Optional[str],
+    myfiles: List[str],
+    spinner: "_emerge.stdout_spinner.stdout_spinner",
+) -> Tuple[Any, depgraph, List[str]]:
     debug = "--debug" in myopts
     mydepgraph = None
     max_retries = myopts.get("--backtrack", 10)
@@ -11494,7 +11532,14 @@ def _backtrack_depgraph(settings, trees, myopts, myparams, myaction, myfiles, sp
     return (success, mydepgraph, favorites)
 
 
-def resume_depgraph(settings, trees, mtimedb, myopts, myparams, spinner):
+def resume_depgraph(
+    settings: portage.package.ebuild.config.config,
+    trees: portage._trees_dict,
+    mtimedb: Any,
+    myopts: Dict[str, str],
+    myparams: Dict[str, Any],
+    spinner: "_emerge.stdout_spinner.stdout_spinner",
+):
     """
     Raises PackageSetNotFound if myfiles contains a missing package set.
     """
@@ -11505,7 +11550,14 @@ def resume_depgraph(settings, trees, mtimedb, myopts, myparams, spinner):
         _spinner_stop(spinner)
 
 
-def _resume_depgraph(settings, trees, mtimedb, myopts, myparams, spinner):
+def _resume_depgraph(
+    settings: portage.package.ebuild.config.config,
+    trees: portage._trees_dict,
+    mtimedb: Any,
+    myopts: Dict[str, str],
+    myparams: Dict[str, Any],
+    spinner: "_emerge.stdout_spinner.stdout_spinner",
+):
     """
     Construct a depgraph for the given resume list. This will raise
     PackageNotFound or depgraph.UnsatisfiedResumeDep when necessary.
