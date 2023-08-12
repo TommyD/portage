@@ -5,6 +5,8 @@ __all__ = ["dbapi"]
 
 import re
 import warnings
+from typing import Any, Dict, List, Optional, Tuple
+from collections.abc import Sequence
 
 import portage
 
@@ -29,7 +31,7 @@ from _emerge.Package import Package
 
 class dbapi:
     _category_re = re.compile(r"^\w[-.+\w]*$", re.UNICODE)
-    _categories = None
+    _categories: Optional[tuple[str, ...]] = None
     _use_mutable = False
     _known_keys = frozenset(auxdbkeys)
     _pkg_str_aux_keys = ("EAPI", "KEYWORDS", "SLOT", "repository")
@@ -38,7 +40,7 @@ class dbapi:
         pass
 
     @property
-    def categories(self):
+    def categories(self) -> tuple[str, ...]:
         """
         Use self.cp_all() to generate a category list. Mutable instances
         can delete the self._categories attribute in cases when the cached
@@ -52,11 +54,11 @@ class dbapi:
     def close_caches(self):
         pass
 
-    def cp_list(self, cp, use_cache=1):
+    def cp_list(self, cp: str, use_cache: int = 1) -> Any:
         raise NotImplementedError(self)
 
     @staticmethod
-    def _cmp_cpv(cpv1, cpv2):
+    def _cmp_cpv(cpv1, cpv2) -> int:
         result = vercmp(cpv1.version, cpv2.version)
         if result == 0 and cpv1.build_time is not None and cpv2.build_time is not None:
             result = (cpv1.build_time > cpv2.build_time) - (
@@ -65,7 +67,7 @@ class dbapi:
         return result
 
     @staticmethod
-    def _cpv_sort_ascending(cpv_list):
+    def _cpv_sort_ascending(cpv_list: Sequence[Any]) -> None:
         """
         Use this to sort self.cp_list() results in ascending
         order. It sorts in place and returns None.
@@ -76,7 +78,7 @@ class dbapi:
             # dict to map strings back to their original values.
             cpv_list.sort(key=cmp_sort_key(dbapi._cmp_cpv))
 
-    def cpv_all(self):
+    def cpv_all(self) -> list[str]:
         """Return all CPVs in the db
         Args:
                 None
@@ -93,16 +95,18 @@ class dbapi:
             cpv_list.extend(self.cp_list(cp))
         return cpv_list
 
-    def cp_all(self, sort=False):
+    def cp_all(self, sort: bool = False) -> list[str]:
         """Implement this in a child class
         Args
                 sort - return sorted results
         Returns:
                 A list of strings 1 per CP in the datastore
         """
-        return NotImplementedError
+        raise NotImplementedError
 
-    def aux_get(self, mycpv, mylist, myrepo=None):
+    def aux_get(
+        self, mycpv: str, mylist: str, myrepo: Optional[str] = None
+    ) -> list[str]:
         """Return the metadata keys in mylist for mycpv
         Args:
                 mycpv - "sys-apps/foo-1.0"
@@ -114,7 +118,7 @@ class dbapi:
         """
         raise NotImplementedError
 
-    def aux_update(self, cpv, metadata_updates):
+    def aux_update(self, cpv: str, metadata_updates: dict[str, Any]) -> None:
         """
         Args:
           cpv - "sys-apps/foo-1.0"
@@ -124,7 +128,7 @@ class dbapi:
         """
         raise NotImplementedError
 
-    def match(self, origdep, use_cache=1):
+    def match(self, origdep: str, use_cache: int = 1):
         """Given a dependency, try to find packages that match
         Args:
                 origdep - Depend atom
@@ -138,7 +142,7 @@ class dbapi:
             self._iter_match(mydep, self.cp_list(mydep.cp, use_cache=use_cache))
         )
 
-    def _iter_match(self, atom, cpv_iter):
+    def _iter_match(self, atom: str, cpv_iter):
         cpv_iter = iter(match_from_list(atom, cpv_iter))
         if atom.repo:
             cpv_iter = self._iter_match_repo(atom, cpv_iter)

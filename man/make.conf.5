@@ -1,4 +1,4 @@
-.TH "MAKE.CONF" "5" "Mar 2023" "Portage VERSION" "Portage"
+.TH "MAKE.CONF" "5" "Mar 2023" "Portage @VERSION@" "Portage"
 .SH "NAME"
 make.conf \- custom settings for Portage
 .SH "SYNOPSIS"
@@ -433,10 +433,6 @@ lead to packages that cannot be emerged. If this happens (if you receive errors
 like "File not recognized: File truncated"), try recompiling the application
 with ccache disabled before reporting a bug. Unless you are doing development
 work, do not enable ccache.
-.TP
-.B cgroup
-Use Linux control group to control processes spawned by ebuilds. This allows
-emerge to safely kill all subprocesses when ebuild phase exits.
 .TP
 .B clean\-logs
 Enable automatic execution of the command specified by the

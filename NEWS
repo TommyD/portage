@@ -1,5 +1,40 @@
+portage-3.0.50 (2023-08-09)
+--------------
+
+Breaking changes:
+* The minimum supported Python version is now >= Python 3.9.
+
+* Portage now installed with Meson and Python sdist + wheel now prepared with
+  meson-python for PEP 517 compliance.
+
+Bug fixes:
+* install-qa-check.d/05prefix: Fix prefixifying shebang for >= EAPI 7 ebuilds
+  (bug #909147).
+
+* env-update: Check exit code from ldconfig (bug #910376).
+
+* emerge: Fix 'no ebuilds available' message always mentioning binpkgs
+  (bug #909853).
+
+* gpkg: Fix timestamp for binary packages (bug #909067).
+
+* Ensure non-Python (s)bin scripts launch other Python-based Portage scripts
+  using the same environment.
+
+* Use the correct Python library path when launching scripts directly from a
+  virtual environment.
+
+* Define BROOT in pkg_* phases following PMS change.
+
+* portage(5): Fix description of 'volatile' repos.conf setting (bug #911594).
+
 portage-3.0.49 (2023-06-21)
 --------------
+
+Breaking changes:
+* FEATURES=cgroup was removed since it was based on version 1 cgroups, which
+  caused some issues and version 1 cgroups are obsolete. Use
+  FEATURES=pid-sandbox instead.
 
 Bug fixes:
 * Adjust write tests for DISTDIR and PORTAGE_TMPDIR to work with automount

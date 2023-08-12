@@ -1905,7 +1905,6 @@ def action_info(settings, trees, myopts, myfiles):
     append(
         getportageversion(
             settings["PORTDIR"],
-            None,
             settings.profile_path,
             chost,
             trees[settings["EROOT"]]["vartree"].dbapi,
@@ -2790,15 +2789,26 @@ def relative_profile_path(portdir, abs_profile):
     return profilever
 
 
-def getportageversion(portdir, _unused, profile, chost, vardb):
-    pythonver = (
-        "python"
-        f" {sys.version_info[0]}"
-        f".{sys.version_info[1]}"
-        f".{sys.version_info[2]}"
-        f"-{sys.version_info[3]}"
-        f"-{sys.version_info[4]}"
-    )
+def get_libc_version(vardb: portage.dbapi.vartree.vardbapi) -> list[str]:
+    libcver = []
+    libclist = set()
+    for atom in expand_new_virt(vardb, portage.const.LIBC_PACKAGE_ATOM):
+        if not atom.blocker:
+            libclist.update(vardb.match(atom))
+    if libclist:
+        for cpv in sorted(libclist):
+            libc_split = portage.catpkgsplit(cpv)[1:]
+            if libc_split[-1] == "r0":
+                libc_split = libc_split[:-1]
+            libcver.append("-".join(libc_split))
+    else:
+        libcver = ["unavailable"]
+    return libcver
+
+
+def get_profile_version(
+    portdir: str, profile: str, vardb: portage.dbapi.vartree.vardbapi
+) -> str:
     profilever = None
     repositories = vardb.settings.repositories
     if profile:
@@ -2839,31 +2849,30 @@ def getportageversion(portdir, _unused, profile, chost, vardb):
     if profilever is None:
         profilever = "unavailable"
 
-    libcver = []
-    libclist = set()
-    for atom in expand_new_virt(vardb, portage.const.LIBC_PACKAGE_ATOM):
-        if not atom.blocker:
-            libclist.update(vardb.match(atom))
-    if libclist:
-        for cpv in sorted(libclist):
-            libc_split = portage.catpkgsplit(cpv)[1:]
-            if libc_split[-1] == "r0":
-                libc_split = libc_split[:-1]
-            libcver.append("-".join(libc_split))
-    else:
-        libcver = ["unavailable"]
+    return profilever
 
+
+def getportageversion(
+    portdir: str,
+    profile: str,
+    chost: str,
+    vardb: portage.dbapi.vartree.vardbapi,
+) -> str:
+    pythonver = (
+        "python"
+        f" {sys.version_info[0]}"
+        f".{sys.version_info[1]}"
+        f".{sys.version_info[2]}"
+        f"-{sys.version_info[3]}"
+        f"-{sys.version_info[4]}"
+    )
+
+    profilever = get_profile_version(portdir, profile, vardb)
+    libcver = get_libc_version(vardb)
     gccver = getgccversion(chost)
     unameout = platform.release() + " " + platform.machine()
 
-    return "Portage {} ({}, {}, {}, {}, {})".format(
-        portage.VERSION + "-multilib",
-        pythonver,
-        profilever,
-        gccver,
-        ",".join(libcver),
-        unameout,
-    )
+    return f"Portage {portage.VERSION}-multilib ({pythonver}, {profilever}, {gccver}, {','.join(libcver)}, {unameout})"
 
 
 class _emerge_config(SlotObject):
@@ -3520,7 +3529,6 @@ def run_action(emerge_config):
         writemsg_stdout(
             getportageversion(
                 emerge_config.target_config.settings["PORTDIR"],
-                None,
                 emerge_config.target_config.settings.profile_path,
                 emerge_config.target_config.settings.get("CHOST"),
                 emerge_config.target_config.trees["vartree"].dbapi,

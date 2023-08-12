@@ -1,4 +1,4 @@
-# Copyright 2010-2020 Gentoo Authors
+# Copyright 2010-2023 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 __all__ = ["env_update"]
@@ -6,6 +6,7 @@ __all__ = ["env_update"]
 import errno
 import glob
 import stat
+import subprocess
 import time
 
 import portage
@@ -360,21 +361,30 @@ def _env_update(makelinks, target_root, prev_mtimes, contents, env, writemsg_lev
             # an older package installed ON TOP of a newer version will cause ldconfig
             # to overwrite the symlinks we just made. -X means no links. After 'clean'
             # we can safely create links.
-            writemsg_level(
-                _(">>> Regenerating %setc/ld.so.cache...\n") % (target_root,)
-            )
-            os.system(f"cd / ; {ldconfig} -X -r '{target_root}'")
+            writemsg_level(_(f">>> Regenerating {target_root}etc/ld.so.cache...\n"))
+            ret = subprocess.run(
+                [ldconfig, "-X", "-r", target_root], cwd="/"
+            ).returncode
         elif ostype in ("FreeBSD", "DragonFly"):
             writemsg_level(
-                _(">>> Regenerating %svar/run/ld-elf.so.hints...\n") % target_root
+                _(f">>> Regenerating {target_root}var/run/ld-elf.so.hints...\n")
             )
-            os.system(
-                (
-                    "cd / ; %s -elf -i "
-                    + "-f '%svar/run/ld-elf.so.hints' '%setc/ld.so.conf'"
-                )
-                % (ldconfig, target_root, target_root)
-            )
+            ret = subprocess.run(
+                [
+                    ldconfig,
+                    "-elf",
+                    "-i",
+                    "-f",
+                    f"{target_root}var/run/ld-elf.so.hints",
+                    f"{target_root}etc/ld.so.conf",
+                ],
+                cwd="/",
+            ).returncode
+
+        if ret > 0:
+            writemsg(f"!!! ldconfig failed with exit status {ret}\n", noiselevel=-1)
+        if ret < 0:
+            writemsg(f"!!! ldconfig was killed with signal {-ret}\n", noiselevel=-1)
 
     del specials["LDPATH"]
 

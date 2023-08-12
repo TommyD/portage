@@ -101,7 +101,11 @@ from _emerge.resolver.circular_dependency import circular_dependency_handler
 from _emerge.resolver.output import Display, format_unmatched_atom
 
 # Type annotation imports
-from typing import Any, Optional, Dict, List, Tuple, Union
+from typing import Any, Optional, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import _emerge.stdout_spinner.stdout_spinner
+
 
 # Exposes a depgraph interface to dep_check.
 _dep_check_graph_interface = collections.namedtuple(
@@ -6456,7 +6460,7 @@ class depgraph:
                     cp_exists = True
                     break
 
-            if self._frozen_config.myopts.get("--usepkgonly", "y"):
+            if self._frozen_config.myopts.get("--usepkgonly", False):
                 writemsg(
                     f"\nemerge: there are no binary packages to satisfy {green(xinfo)}.\n",
                     noiselevel=-1,
@@ -11409,12 +11413,12 @@ def _spinner_stop(spinner):
 def backtrack_depgraph(
     settings: portage.package.ebuild.config.config,
     trees: portage._trees_dict,
-    myopts: Dict[str, Any],
-    myparams: Dict[str, Union[int, str, bool]],
+    myopts: dict[str, Union[str, int, bool]],
+    myparams: dict[str, Union[int, str, bool]],
     myaction: Optional[str],
-    myfiles: List[str],
+    myfiles: list[str],
     spinner: "_emerge.stdout_spinner.stdout_spinner",
-) -> Tuple[Any, depgraph, List[str]]:
+) -> tuple[Any, depgraph, list[str]]:
     """
 
     Raises PackageSetNotFound if myfiles contains a missing package set.
@@ -11431,12 +11435,12 @@ def backtrack_depgraph(
 def _backtrack_depgraph(
     settings: portage.package.ebuild.config.config,
     trees: portage._trees_dict,
-    myopts: Dict[str, Any],
-    myparams: Dict[str, Union[int, str, bool]],
+    myopts: dict[str, Union[str, int, bool]],
+    myparams: dict[str, Union[int, str, bool]],
     myaction: Optional[str],
-    myfiles: List[str],
+    myfiles: list[str],
     spinner: "_emerge.stdout_spinner.stdout_spinner",
-) -> Tuple[Any, depgraph, List[str]]:
+) -> tuple[Any, depgraph, list[str]]:
     debug = "--debug" in myopts
     mydepgraph = None
     max_retries = myopts.get("--backtrack", 10)
@@ -11536,8 +11540,8 @@ def resume_depgraph(
     settings: portage.package.ebuild.config.config,
     trees: portage._trees_dict,
     mtimedb: Any,
-    myopts: Dict[str, str],
-    myparams: Dict[str, Any],
+    myopts: dict[str, Union[str, int, bool]],
+    myparams: dict[str, Union[str, bool]],
     spinner: "_emerge.stdout_spinner.stdout_spinner",
 ):
     """
@@ -11554,8 +11558,8 @@ def _resume_depgraph(
     settings: portage.package.ebuild.config.config,
     trees: portage._trees_dict,
     mtimedb: Any,
-    myopts: Dict[str, str],
-    myparams: Dict[str, Any],
+    myopts: dict[str, Union[str, int, bool]],
+    myparams: dict[str, Union[str, bool]],
     spinner: "_emerge.stdout_spinner.stdout_spinner",
 ):
     """
