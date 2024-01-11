@@ -84,9 +84,12 @@ class bindbapi(fakedbapi):
     _known_keys = frozenset(
         list(fakedbapi._known_keys) + ["CHOST", "repository", "USE"]
     )
+    # Must include keys used to create _pkg_str attributes used in
+    # the fakedbapi _instance_key_multi_instance method.
     _pkg_str_aux_keys = fakedbapi._pkg_str_aux_keys + (
         "BUILD_ID",
         "BUILD_TIME",
+        "SIZE",
         "_mtime_",
     )
 
@@ -291,6 +294,24 @@ class bindbapi(fakedbapi):
         elif binpkg_format == "gpkg":
             mybinpkg = portage.gpkg.gpkg(self.settings, cpv_str, binpkg_path)
             mydata = mybinpkg.get_metadata()
+            if mybinpkg.signature_exist:
+                writemsg(
+                    colorize(
+                        "WARN",
+                        f"Binpkg update ignored for signed package: {binpkg_path}, "
+                        "the file will be removed.",
+                    )
+                )
+                try:
+                    os.remove(binpkg_path)
+                except OSError as err:
+                    writemsg(
+                        colorize(
+                            "WARN",
+                            f"Failed to remove moved signed package: {binpkg_path} {str(err)}",
+                        )
+                    )
+                return
             encoding_key = False
         else:
             raise InvalidBinaryPackageFormat(
@@ -687,7 +708,6 @@ class binarytree:
                 )
                 continue
 
-            moves += 1
             binpkg_format = get_binpkg_format(binpkg_path)
             if binpkg_format == "xpak":
                 mytbz2 = portage.xpak.tbz2(binpkg_path)
@@ -707,6 +727,8 @@ class binarytree:
                 decode_metadata_name = True
             else:
                 continue
+
+            moves += 1
 
             updated_items = update_dbentries([mylist], mydata, parent=mycpv)
             mydata.update(updated_items)

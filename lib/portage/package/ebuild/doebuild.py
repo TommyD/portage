@@ -76,6 +76,7 @@ from portage.dep import (
     paren_enclose,
     use_reduce,
 )
+from portage.dep.libc import find_libc_deps
 from portage.eapi import (
     eapi_exports_KV,
     eapi_exports_merge_type,
@@ -118,7 +119,7 @@ from portage.util.futures.executor.fork import ForkExecutor
 from portage.util.path import first_existing
 from portage.util.socks5 import get_socks5_proxy
 from portage.util._dyn_libs.dyn_libs import check_dyn_libs_inconsistent
-from portage.versions import _pkgsplit
+from portage.versions import _pkgsplit, pkgcmp
 from _emerge.BinpkgEnvExtractor import BinpkgEnvExtractor
 from _emerge.EbuildBuildDir import EbuildBuildDir
 from _emerge.EbuildPhase import EbuildPhase
@@ -2487,8 +2488,8 @@ def _post_src_install_write_metadata(settings):
     """
 
     eapi_attrs = _get_eapi_attrs(settings.configdict["pkg"]["EAPI"])
-
     build_info_dir = os.path.join(settings["PORTAGE_BUILDDIR"], "build-info")
+    metadata_buffer = {}
 
     metadata_keys = ["IUSE"]
     if eapi_attrs.iuse_effective:
@@ -2501,12 +2502,12 @@ def _post_src_install_write_metadata(settings):
             for i in settings.get('MULTILIB_ABIS').split():
                 v = v + " multilib_abi_" + i
         if v is not None:
-            write_atomic(os.path.join(build_info_dir, k), v + "\n")
+            metadata_buffer[k] = v
 
     for k in ("CHOST",):
         v = settings.get(k)
         if v is not None:
-            write_atomic(os.path.join(build_info_dir, k), v + "\n")
+            metadata_buffer[k] = v
 
     with open(
         _unicode_encode(
@@ -2546,17 +2547,7 @@ def _post_src_install_write_metadata(settings):
             except OSError:
                 pass
             continue
-        with open(
-            _unicode_encode(
-                os.path.join(build_info_dir, k),
-                encoding=_encodings["fs"],
-                errors="strict",
-            ),
-            mode="w",
-            encoding=_encodings["repo.content"],
-            errors="strict",
-        ) as f:
-            f.write(f"{v}\n")
+        metadata_buffer[k] = v
 
     if eapi_attrs.slot_operator:
         deps = evaluate_slot_operator_equal_deps(settings, use, QueryCommand.get_db())
@@ -2568,17 +2559,20 @@ def _post_src_install_write_metadata(settings):
                 except OSError:
                     pass
                 continue
-            with open(
-                _unicode_encode(
-                    os.path.join(build_info_dir, k),
-                    encoding=_encodings["fs"],
-                    errors="strict",
-                ),
-                mode="w",
-                encoding=_encodings["repo.content"],
+
+            metadata_buffer[k] = v
+
+    for k, v in metadata_buffer.items():
+        with open(
+            _unicode_encode(
+                os.path.join(build_info_dir, k),
+                encoding=_encodings["fs"],
                 errors="strict",
-            ) as f:
-                f.write(f"{v}\n")
+            ),
+            mode="w",
+            encoding=_encodings["repo.content"],
+        ) as f:
+            f.write(f"{v}\n")
 
 
 def _preinst_bsdflags(mysettings):
@@ -2860,6 +2854,48 @@ def _reapply_bsdflags_to_image(mysettings):
         )
 
 
+def _inject_libc_dep(build_info_dir, mysettings):
+    #
+    # We could skip this for non-binpkgs but there doesn't seem to be much
+    # value in that, as users shouldn't downgrade libc anyway.
+    injected_libc_depstring = []
+    for libc_realized_atom in find_libc_deps(
+        QueryCommand.get_db()[mysettings["EROOT"]]["vartree"].dbapi, True
+    ):
+        if pkgcmp(mysettings.mycpv, libc_realized_atom) is not None:
+            # We don't want to inject deps on ourselves (libc)
+            injected_libc_depstring = []
+            break
+
+        injected_libc_depstring.append(f">={libc_realized_atom}")
+
+    rdepend_file = os.path.join(build_info_dir, "RDEPEND")
+    # Slurp the existing contents because we need to mangle it a bit
+    # It'll look something like (if it exists):
+    # ```
+    # app-misc/foo dev-libs/bar
+    # <newline>
+    # ````
+    rdepend = None
+    if os.path.exists(rdepend_file):
+        with open(rdepend_file, encoding="utf-8") as f:
+            rdepend = f.readlines()
+        rdepend = "\n".join(rdepend).strip()
+
+    # For RDEPEND, we want an implicit dependency on >=${PROVIDER_OF_LIBC}
+    # to avoid runtime breakage when merging binpkgs, see bug #753500.
+    #
+    if injected_libc_depstring:
+        if rdepend:
+            rdepend += f" {' '.join(injected_libc_depstring).strip()}"
+        else:
+            # The package doesn't have an RDEPEND, so make one up.
+            rdepend = " ".join(injected_libc_depstring)
+
+        with open(rdepend_file, "w", encoding="utf-8") as f:
+            f.write(f"{rdepend}\n")
+
+
 def _post_src_install_soname_symlinks(mysettings, out):
     """
     Check that libraries in $D have corresponding soname symlinks.
@@ -2876,9 +2912,8 @@ def _post_src_install_soname_symlinks(mysettings, out):
     if not os.path.isdir (image_dir):
         return
 
-    needed_filename = os.path.join(
-        mysettings["PORTAGE_BUILDDIR"], "build-info", "NEEDED.ELF.2"
-    )
+    build_info_dir = os.path.join(mysettings["PORTAGE_BUILDDIR"], "build-info")
+    needed_filename = os.path.join(build_info_dir, "NEEDED.ELF.2")
 
     f = None
     try:
@@ -2897,6 +2932,11 @@ def _post_src_install_soname_symlinks(mysettings, out):
     finally:
         if f is not None:
             f.close()
+
+    # We do RDEPEND mangling here instead of the natural location
+    # in _post_src_install_write_metadata because NEEDED hasn't been
+    # written yet at that point.
+    _inject_libc_dep(build_info_dir, mysettings)
 
     metadata = {}
     for k in ("QA_PREBUILT", "QA_SONAME_NO_SYMLINK"):

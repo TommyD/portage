@@ -36,6 +36,7 @@ from portage.dep import (
     match_from_list,
     _repo_separator,
 )
+from portage.dep.libc import find_libc_deps, strip_libc_deps
 from portage.dep._slot_operator import ignore_built_slot_operator_deps, strip_slots
 from portage.eapi import eapi_has_strong_blocks, eapi_has_required_use, _get_eapi_attrs
 from portage.exception import (
@@ -1288,17 +1289,33 @@ class depgraph:
             writemsg(line + "\n", noiselevel=-1)
 
     def _show_ignored_binaries_changed_deps(self, changed_deps):
+        merging = {
+            (pkg.root, pkg.cpv)
+            for pkg in self._dynamic_config._displayed_list or ()
+            if isinstance(pkg, Package)
+        }
+        messages = []
+
+        for pkg in changed_deps:
+            # Don't include recursive deps which aren't in the merge list anyway.
+            if (pkg.root, pkg.cpv) not in merging:
+                continue
+
+            msg = f"     {pkg.cpv}{_repo_separator}{pkg.repo}"
+            if pkg.root_config.settings["ROOT"] != "/":
+                msg += f" for {pkg.root}"
+            messages.append(f"{msg}\n")
+
+        if not messages:
+            return
+
         writemsg(
             "\n!!! The following binary packages have been "
             "ignored due to changed dependencies:\n\n",
             noiselevel=-1,
         )
-
-        for pkg in changed_deps:
-            msg = f"     {pkg.cpv}{_repo_separator}{pkg.repo}"
-            if pkg.root_config.settings["ROOT"] != "/":
-                msg += f" for {pkg.root}"
-            writemsg(f"{msg}\n", noiselevel=-1)
+        for line in messages:
+            writemsg(line, noiselevel=-1)
 
         msg = [
             "",
@@ -2968,6 +2985,19 @@ class depgraph:
             else:
                 depvars = Package._runtime_keys
 
+            eroot = pkg.root_config.settings["EROOT"]
+            try:
+                libc_deps = self._frozen_config._libc_deps_cache[eroot]
+            except (AttributeError, KeyError) as e:
+                if isinstance(e, AttributeError):
+                    self._frozen_config._libc_deps_cache = {}
+
+                self._frozen_config._libc_deps_cache[eroot] = find_libc_deps(
+                    self._frozen_config._trees_orig[eroot]["vartree"].dbapi,
+                    False,
+                )
+            libc_deps = self._frozen_config._libc_deps_cache[eroot]
+
             # Use _raw_metadata, in order to avoid interaction
             # with --dynamic-deps.
             try:
@@ -2980,6 +3010,10 @@ class depgraph:
                         token_class=Atom,
                     )
                     strip_slots(dep_struct)
+                    # This strip_libc_deps call is done with non-realized deps;
+                    # we can change that later if we're having trouble with
+                    # matching/intersecting them.
+                    strip_libc_deps(dep_struct, libc_deps)
                     built_deps.append(dep_struct)
             except InvalidDependString:
                 changed = True
@@ -2993,6 +3027,10 @@ class depgraph:
                         token_class=Atom,
                     )
                     strip_slots(dep_struct)
+                    # This strip_libc_deps call is done with non-realized deps;
+                    # we can change that later if we're having trouble with
+                    # matching/intersecting them.
+                    strip_libc_deps(dep_struct, libc_deps)
                     unbuilt_deps.append(dep_struct)
 
                 changed = built_deps != unbuilt_deps
@@ -3614,7 +3652,7 @@ class depgraph:
                     blocker=False,
                     depth=depth,
                     parent=pkg,
-                    priority=self._priority(runtime=True),
+                    priority=self._priority(cross=self._cross(pkg.root), runtime=True),
                     root=pkg.root,
                 )
                 if not self._add_dep(dep, allow_unsatisfied=allow_unsatisfied):
@@ -3952,17 +3990,26 @@ class depgraph:
         # _dep_disjunctive_stack first, so that choices for build-time
         # deps influence choices for run-time deps (bug 639346).
         deps = (
-            (myroot, edepend["RDEPEND"], self._priority(runtime=True)),
+            (
+                myroot,
+                edepend["RDEPEND"],
+                self._priority(cross=self._cross(pkg.root), runtime=True),
+            ),
             (
                 self._frozen_config._running_root.root,
                 edepend["IDEPEND"],
-                self._priority(runtime=True),
+                self._priority(cross=self._cross(pkg.root), runtime=True),
             ),
-            (myroot, edepend["PDEPEND"], self._priority(runtime_post=True)),
+            (
+                myroot,
+                edepend["PDEPEND"],
+                self._priority(cross=self._cross(pkg.root), runtime_post=True),
+            ),
             (
                 depend_root,
                 edepend["DEPEND"],
                 self._priority(
+                    cross=self._cross(pkg.root),
                     buildtime=True,
                     optional=(pkg.built or ignore_depend_deps),
                     ignored=ignore_depend_deps,
@@ -3972,6 +4019,7 @@ class depgraph:
                 self._frozen_config._running_root.root,
                 edepend["BDEPEND"],
                 self._priority(
+                    cross=self._cross(pkg.root),
                     buildtime=True,
                     optional=(pkg.built or ignore_bdepend_deps),
                     ignored=ignore_bdepend_deps,
@@ -4020,7 +4068,9 @@ class depgraph:
                             self._queue_disjunctive_deps(
                                 pkg,
                                 dep_root,
-                                self._priority(runtime_post=True),
+                                self._priority(
+                                    cross=self._cross(pkg.root), runtime_post=True
+                                ),
                                 test_deps,
                             )
                         )
@@ -4028,7 +4078,9 @@ class depgraph:
                         if test_deps and not self._add_pkg_dep_string(
                             pkg,
                             dep_root,
-                            self._priority(runtime_post=True),
+                            self._priority(
+                                cross=self._cross(pkg.root), runtime_post=True
+                            ),
                             test_deps,
                             allow_unsatisfied,
                         ):
@@ -4343,7 +4395,10 @@ class depgraph:
                     return 0
 
             for atom, child in self._minimize_children(
-                pkg, self._priority(runtime=True), root_config, atoms
+                pkg,
+                self._priority(cross=self._cross(pkg.root), runtime=True),
+                root_config,
+                atoms,
             ):
                 # If this was a specially generated virtual atom
                 # from dep_check, map it back to the original, in
@@ -4353,7 +4408,7 @@ class depgraph:
                 atom = getattr(atom, "_orig_atom", atom)
 
                 # This is a GLEP 37 virtual, so its deps are all runtime.
-                mypriority = self._priority(runtime=True)
+                mypriority = self._priority(cross=self._cross(pkg.root), runtime=True)
                 if not atom.blocker:
                     inst_pkgs = [
                         inst_pkg
@@ -4599,6 +4654,13 @@ class depgraph:
         else:
             priority_constructor = DepPriority
         return priority_constructor(**kwargs)
+
+    def _cross(self, eroot):
+        """
+        Returns True if the ROOT for the given EROOT is not /,
+        or EROOT is cross-prefix.
+        """
+        return eroot != self._frozen_config._running_root.root
 
     def _dep_expand(self, root_config, atom_without_category):
         """
@@ -5772,7 +5834,9 @@ class depgraph:
                             node_priority = priority.copy()
                     else:
                         # virtuals only have runtime deps
-                        node_priority = self._priority(runtime=True)
+                        node_priority = self._priority(
+                            cross=self._cross(node_parent.root), runtime=True
+                        )
 
                     k = Dependency(
                         atom=parent_atom,
@@ -5858,7 +5922,7 @@ class depgraph:
                 pkg._metadata.get("RDEPEND", ""),
                 myuse=self._pkg_use_enabled(pkg),
                 parent=pkg,
-                priority=self._priority(runtime=True),
+                priority=self._priority(cross=self._cross(pkg.root), runtime=True),
             )
         except InvalidDependString as e:
             if not pkg.installed:
