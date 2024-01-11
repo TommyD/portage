@@ -6,6 +6,12 @@ import signal
 
 import asyncio as _real_asyncio
 from asyncio.events import AbstractEventLoop as _AbstractEventLoop
+from asyncio.unix_events import ThreadedChildWatcher
+
+try:
+    from asyncio.unix_events import PidfdChildWatcher
+except ImportError:
+    PidfdChildWatcher = None
 
 import portage
 
@@ -90,9 +96,24 @@ class AsyncioEventLoop(_AbstractEventLoop):
         @return: the internal event loop's AbstractChildWatcher interface
         """
         if self._child_watcher is None:
-            self._child_watcher = _ChildWatcherThreadSafetyWrapper(
-                self, _real_asyncio.get_child_watcher()
-            )
+            pidfd_works = False
+            if PidfdChildWatcher is not None and hasattr(os, "pidfd_open"):
+                try:
+                    fd = os.pidfd_open(portage.getpid())
+                except Exception:
+                    pass
+                else:
+                    os.close(fd)
+                    pidfd_works = True
+
+            if pidfd_works:
+                watcher = PidfdChildWatcher()
+            else:
+                watcher = ThreadedChildWatcher()
+
+            watcher.attach_loop(self._loop)
+            self._child_watcher = _ChildWatcherThreadSafetyWrapper(self, watcher)
+
         return self._child_watcher
 
     @property
@@ -135,6 +156,10 @@ class AsyncioEventLoop(_AbstractEventLoop):
 
 
 class _ChildWatcherThreadSafetyWrapper:
+    """
+    This class provides safety if multiple loops are running in different threads.
+    """
+
     def __init__(self, loop, real_watcher):
         self._loop = loop
         self._real_watcher = real_watcher

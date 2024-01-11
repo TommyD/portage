@@ -590,7 +590,9 @@ def doebuild_environment(
             if nproc:
                 mysettings["MAKEOPTS"] = "-j%d" % (nproc)
             if "GNUMAKEFLAGS" not in mysettings and "MAKEFLAGS" not in mysettings:
-                mysettings["GNUMAKEFLAGS"] = "--output-sync=line"
+                mysettings[
+                    "GNUMAKEFLAGS"
+                ] = f"--load-average {nproc} --output-sync=line"
 
         if not eapi_exports_KV(eapi):
             # Discard KV for EAPIs that don't support it. Cached KV is restored
@@ -2671,6 +2673,10 @@ def _post_src_install_uid_fix(mysettings, out):
         desktopfile_errors = []
 
         for parent, dirs, files in os.walk(destdir):
+            if portage.utf8_mode:
+                parent = os.fsencode(parent)
+                dirs = [os.fsencode(value) for value in dirs]
+                files = [os.fsencode(value) for value in files]
             try:
                 parent = _unicode_decode(
                     parent, encoding=_encodings["merge"], errors="strict"
@@ -2775,7 +2781,9 @@ def _post_src_install_uid_fix(mysettings, out):
                         # a normal write might fail due to file permission
                         # settings on some operating systems such as HP-UX
                         write_atomic(
-                            _unicode_encode(
+                            fpath
+                            if portage.utf8_mode
+                            else _unicode_encode(
                                 fpath, encoding=_encodings["merge"], errors="strict"
                             ),
                             new_contents,
