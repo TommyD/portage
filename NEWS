@@ -1,3 +1,28 @@
+portage-3.0.51 (2023-08-20)
+--------------
+
+Features:
+* emerge: Set up logging immediately and respect --debug for log level.
+
+* sync: git, rsync: now respects --debug for better output from gemato. This is
+  especially useful for debugging hangs during the 'Refreshing keys' stage.
+
+Bug fixes:
+* sync (inc. emerge-webrsync): Handle https_proxy to help users who only have it set
+  - the expectation is to have http_proxy set (bug #691434, bug #835927, bug #911629)
+
+* sync: git: respect --quiet more for PGP verification (bug #673624).
+
+* emerge-webrsync: Explicitly pass http_proxy or https_proxy into gemato
+  via --proxy (bug #911629).
+
+* doebuild: gate -Oline behind MAKEFLAGS check (bug #909009).
+
+* misc/emerge-delta-webrsync: Fix PGP logic which prevented syncing for this
+  rarely-used tool (bug #911335).
+
+* make.conf(5): Mention https_proxy.
+
 portage-3.0.50 (2023-08-09)
 --------------
 
@@ -7,9 +32,18 @@ Breaking changes:
 * Portage now installed with Meson and Python sdist + wheel now prepared with
   meson-python for PEP 517 compliance.
 
+* FEATURES=cgroup was removed since it was based on version 1 cgroups, which
+  caused some issues and version 1 cgroups are obsolete. Use
+  FEATURES=pid-sandbox instead.
+
 Bug fixes:
 * install-qa-check.d/05prefix: Fix prefixifying shebang for >= EAPI 7 ebuilds
   (bug #909147).
+
+* bin/save-ebuild-env.sh: Stop using compgen and hence stop needing readline
+  (bug #909148).
+
+* _reflink_linux_file_copy: Fix -Wmaybe-uninitialized.
 
 * env-update: Check exit code from ldconfig (bug #910376).
 
@@ -30,11 +64,6 @@ Bug fixes:
 
 portage-3.0.49 (2023-06-21)
 --------------
-
-Breaking changes:
-* FEATURES=cgroup was removed since it was based on version 1 cgroups, which
-  caused some issues and version 1 cgroups are obsolete. Use
-  FEATURES=pid-sandbox instead.
 
 Bug fixes:
 * Adjust write tests for DISTDIR and PORTAGE_TMPDIR to work with automount
