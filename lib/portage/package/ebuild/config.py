@@ -1573,7 +1573,7 @@ class config:
             except KeyError as e:
                 writemsg(
                     "!!! BINPKG_COMPRESS contains invalid or "
-                    "unsupported compression method: %s" % e.args[0],
+                    "unsupported compression method: %s\n" % e.args[0],
                     noiselevel=-1,
                 )
             else:
@@ -1595,7 +1595,7 @@ class config:
                 except IndexError as e:
                     writemsg(
                         "!!! BINPKG_COMPRESS contains invalid or "
-                        "unsupported compression method: %s" % e.args[0],
+                        "unsupported compression method: %s\n" % e.args[0],
                         noiselevel=-1,
                     )
                 else:
@@ -1603,7 +1603,7 @@ class config:
                         missing_package = compression["package"]
                         writemsg(
                             "!!! BINPKG_COMPRESS unsupported %s. "
-                            "Missing package: %s"
+                            "Missing package: %s\n"
                             % (binpkg_compression, missing_package),
                             noiselevel=-1,
                         )
@@ -2853,7 +2853,7 @@ class config:
 
         use_expand_unprefixed = self.get("USE_EXPAND_UNPREFIXED", "").split()
 
-        # In order to best accomodate the long-standing practice of
+        # In order to best accommodate the long-standing practice of
         # setting default USE_EXPAND variables in the profile's
         # make.defaults, we translate these variables into their
         # equivalent USE flags so that useful incremental behavior

@@ -1,6 +1,7 @@
 py.install_sources(
     [
         'ResolverPlayground.py',
+        'test_alternatives_gzip.py',
         'test_aggressive_backtrack_downgrade.py',
         'test_autounmask.py',
         'test_autounmask_binpkg_use.py',
@@ -48,6 +49,7 @@ py.install_sources(
         'test_profile_default_eapi.py',
         'test_profile_package_set.py',
         'test_rebuild.py',
+        'test_rebuild_ghostscript.py',
         'test_regular_slot_change_without_revbump.py',
         'test_required_use.py',
         'test_runtime_cycle_merge_order.py',

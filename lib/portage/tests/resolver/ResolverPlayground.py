@@ -336,7 +336,7 @@ class ResolverPlayground:
                 raise AssertionError(f"digest creation failed for {ebuild_path}")
 
     def _create_binpkgs(self, binpkgs):
-        # When using BUILD_ID, there can be mutiple instances for the
+        # When using BUILD_ID, there can be multiple instances for the
         # same cpv. Therefore, binpkgs may be an iterable instead of
         # a dict.
         items = getattr(binpkgs, "items", None)
@@ -590,9 +590,6 @@ class ResolverPlayground:
             "PORTAGE_INST_UID": str(portage.data.portage_uid),
             "PORTAGE_TMPDIR": os.path.join(self.eroot, "var/tmp"),
         }
-
-        if portage.util.no_color(os.environ):
-            make_conf["NO_COLOR"] = os.environ["NO_COLOR"]
 
         # Pass along PORTAGE_USERNAME and PORTAGE_GRPNAME since they
         # need to be inherited by ebuild subprocesses.

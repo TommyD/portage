@@ -4,12 +4,14 @@
 import logging
 import re
 import subprocess
+import datetime
 
 import portage
 from portage import os
 from portage.util import writemsg_level, shlex_split
 from portage.util.futures import asyncio
 from portage.output import create_color_func, EOutput
+from portage.const import TIMESTAMP_FORMAT
 
 good = create_color_func("GOOD")
 bad = create_color_func("BAD")
@@ -186,7 +188,7 @@ class GitSync(NewBase):
         #
         # For sync-type=git repositories, we've seen a problem in the wild
         # where shallow clones end up "breaking themselves" especially when
-        # the origin is behing a CDN. 'git pull' might return state X,
+        # the origin is behind a CDN. 'git pull' might return state X,
         # but on a subsequent pull, return state X-1. git will then (sometimes)
         # leave orphaned untracked files in the repository. On a subsequent pull,
         # when state >= X is returned where those files exist in the origin,
@@ -202,7 +204,7 @@ class GitSync(NewBase):
         # 2.
         #   - volatile=no (explicitly set to no), OR
         #   - volatile is unset AND the repository owner is either root or portage
-        # 3. Portage is syncing the respository (rather than e.g. auto-sync=no
+        # 3. Portage is syncing the repository (rather than e.g. auto-sync=no
         # and never running 'emaint sync -r foo')
         #
         # Portage will not clobber if:
@@ -436,6 +438,52 @@ class GitSync(NewBase):
         return (os.EX_OK, current_rev != previous_rev)
 
     def verify_head(self, revision="-1") -> bool:
+        max_age_days = self.repo.module_specific_options.get(
+            "sync-git-verify-max-age-days", ""
+        )
+        if max_age_days:
+            try:
+                max_age_days = int(max_age_days)
+                if max_age_days <= 0:
+                    raise ValueError(max_age_days)
+            except ValueError:
+                writemsg_level(
+                    f"!!! sync-git-max-age-days must be a positive non-zero integer: {max_age_days}\n",
+                    level=logging.ERROR,
+                    noiselevel=-1,
+                )
+                return False
+            show_timestamp_chk_file_cmd = [
+                self.bin_command,
+                "show",
+                f"{revision}:metadata/timestamp.chk",
+            ]
+            try:
+                timestamp_chk = portage._unicode_decode(
+                    subprocess.check_output(
+                        show_timestamp_chk_file_cmd,
+                        cwd=portage._unicode_encode(self.repo.location),
+                    )
+                ).strip()
+            except subprocess.CalledProcessError as e:
+                writemsg_level(
+                    f"!!! {show_timestamp_chk_file_cmd} failed with {e.returncode}",
+                    level=logging.ERROR,
+                    noiselevel=-1,
+                )
+                return False
+            timestamp = datetime.datetime.strptime(timestamp_chk, TIMESTAMP_FORMAT)
+            max_timestamp_age = datetime.datetime.now() - datetime.timedelta(
+                days=max_age_days
+            )
+            if timestamp < max_timestamp_age:
+                writemsg_level(
+                    f"!!! timestamp (from timestamp.chk) {timestamp} is older than max age {max_timestamp_age}\n",
+                    level=logging.ERROR,
+                    noiselevel=-1,
+                )
+                return False
+
         if self.repo.module_specific_options.get(
             "sync-git-verify-commit-signature", "false"
         ).lower() not in ("true", "yes"):

@@ -1,4 +1,4 @@
-# Copyright 1999-2021 Gentoo Authors
+# Copyright 1999-2023 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 from collections import deque
@@ -940,6 +940,10 @@ class Scheduler(PollScheduler):
                     # is consuming time here.
                     if bintree.isremote(x.cpv):
                         fetcher = self._get_prefetcher(x)
+                        if fetcher is not None and not fetcher.isAlive():
+                            # Cancel it because it hasn't started yet.
+                            fetcher.cancel()
+                            fetcher = None
                         if fetcher is None:
                             fetcher = BinpkgFetcher(pkg=x, scheduler=loop)
                             fetcher.start()
@@ -948,6 +952,16 @@ class Scheduler(PollScheduler):
                             # handles fetch, verification, and the
                             # bintree.inject call which moves the file.
                             fetched = fetcher.pkg_path
+                        else:
+                            msg = (
+                                "Fetching in the background:",
+                                fetcher.pkg_path,
+                                "To view fetch progress, run in another terminal:",
+                                f"tail -f {self._fetch_log}",
+                            )
+                            out = portage.output.EOutput()
+                            for l in msg:
+                                out.einfo(l)
                         if await fetcher.async_wait() != os.EX_OK:
                             failures += 1
                             self._record_pkg_failure(x, settings, fetcher.returncode)
@@ -1260,7 +1274,8 @@ class Scheduler(PollScheduler):
             and not mod_echo_output
         ):
             failed_pkg_map = {}
-            for pkg in self._failed_pkgs_all:
+            for failed_pkg in self._failed_pkgs_all:
+                pkg = failed_pkg.pkg
                 failed_pkg_map[(pkg.cpv, pkg.root)] = pkg
 
             for mysettings, key, logentries in self._failed_pkgs_die_msgs:
@@ -1952,7 +1967,9 @@ class Scheduler(PollScheduler):
             # CPython 2.7, so it may be possible for CPython to raise KeyError
             # here as well.
             prefetcher = None
-        if prefetcher is not None and not prefetcher.isAlive():
+        if prefetcher is not None and (
+            prefetcher.cancelled or not prefetcher.isAlive()
+        ):
             try:
                 self._task_queues.fetch._task_queue.remove(prefetcher)
             except ValueError:

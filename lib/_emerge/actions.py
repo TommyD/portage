@@ -54,7 +54,6 @@ from portage.output import (
     darkgreen,
     red,
     xtermTitle,
-    xtermTitleReset,
 )
 
 good = create_color_func("GOOD")
@@ -2750,15 +2749,10 @@ def adjust_config(myopts, settings):
     if "--color" in myopts:
         if "y" == myopts["--color"]:
             portage.output.havecolor = 1
-            settings["NO_COLOR"] = ""
         else:
             portage.output.havecolor = 0
-            settings["NO_COLOR"] = "true"
-        settings.backup_changes("NO_COLOR")
     elif settings.get("TERM") == "dumb" or not sys.stdout.isatty():
         portage.output.havecolor = 0
-        settings["NO_COLOR"] = "true"
-        settings.backup_changes("NO_COLOR")
 
     if "--pkg-format" in myopts:
         settings["PORTAGE_BINPKG_FORMAT"] = myopts["--pkg-format"]
@@ -3834,15 +3828,6 @@ def run_action(emerge_config):
         sys.exit(128 + signum)
 
     signal.signal(signal.SIGTERM, emergeexitsig)
-
-    def emergeexit():
-        """This gets out final log message in before we quit."""
-        if "--pretend" not in emerge_config.opts:
-            emergelog(xterm_titles, " *** terminating.")
-        if xterm_titles:
-            xtermTitleReset()
-
-    portage.atexit_register(emergeexit)
 
     if emerge_config.action in ("config", "metadata", "regen", "sync"):
         if "--pretend" in emerge_config.opts:
