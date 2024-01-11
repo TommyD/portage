@@ -6,6 +6,20 @@ Release notes take the form of the following optional categories:
 * Bug fixes
 * Cleanups
 
+portage-3.0.55 (2023-11-06)
+--------------
+
+Bug fixes:
+* Convert portageq helper to a function to avoid breaking external callers
+  (bug #916287, bug #916296).
+
+* Avoid crash with incomplete depgraph for binpkg-respect-use notice (bug #916614).
+
+* Avoid crash with blockers in depgraph for binpkg-respect-use notice (bug #916336).
+
+* Don't call trust helper (e.g. getuto) with --getbinpkg --pretend as we may
+  lack privileges to do anything (bug #915842).
+
 portage-3.0.54 (2023-10-25)
 --------------
 
@@ -34,7 +48,9 @@ Bug fixes:
 
 * sync: git: Handle when git is configured with 'log.showSignature'.
 
-* StaticFileSet: Fix os.walk for utf8_mode (bug #916182). This broke app-portage/unsymlink-lib.
+* StaticFileSet: Fix os.walk for utf8_mode (bug #916182).
+
+* create_trees: Handle bytes arguments for utf8_mode (bug #916149). This broke app-portage/unsymlink-lib.
 
 Cleanups:
 * MergeProcess: Support QueryCommand with spawn start method (bug #916106)
