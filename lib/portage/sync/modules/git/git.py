@@ -139,8 +139,12 @@ class GitSync(NewBase):
         """
         if not self.has_bin:
             return (1, False)
+
+        opts = self.options.get("emerge_config").opts
+
         git_cmd_opts = ""
         quiet = self.settings.get("PORTAGE_QUIET") == "1"
+        verbose = "--verbose" in opts
 
         # We don't want to operate with a .git outside of the given
         # repo in any circumstances.
@@ -170,6 +174,8 @@ class GitSync(NewBase):
 
         if quiet:
             git_cmd_opts += " --quiet"
+        elif verbose:
+            git_cmd_opts += " --verbose"
 
         # The logic here is a bit delicate. We need to balance two things:
         # 1. Having a robust sync mechanism which works unattended.
@@ -294,11 +300,38 @@ class GitSync(NewBase):
                 writemsg_level(msg + "\n", level=logging.ERROR, noiselevel=-1)
                 return (exitcode, False)
 
-        git_cmd = "{} fetch {}{}".format(
-            self.bin_command,
-            remote_branch.partition("/")[0],
-            git_cmd_opts,
-        )
+        git_remote = remote_branch.partition("/")[0]
+
+        if not self.repo.volatile:
+            git_get_remote_url_cmd = ["git", "ls-remote", "--get-url", git_remote]
+            git_remote_url = portage._unicode_decode(
+                subprocess.check_output(
+                    git_get_remote_url_cmd,
+                    cwd=portage._unicode_encode(self.repo.location),
+                )
+            ).strip()
+            if git_remote_url != self.repo.sync_uri:
+                git_set_remote_url_cmd = [
+                    "git",
+                    "remote",
+                    "set-url",
+                    git_remote,
+                    self.repo.sync_uri,
+                ]
+                exitcode = portage.process.spawn(
+                    git_set_remote_url_cmd,
+                    cwd=portage._unicode_encode(self.repo.location),
+                    **self.spawn_kwargs,
+                )
+                if exitcode != os.EX_OK:
+                    msg = f"!!! could not update git remote {git_remote}'s url to {self.repo.sync_uri}"
+                    self.logger(self.xterm_titles, msg)
+                    writemsg_level(msg + "\n", level=logging.ERROR, noiselevel=-1)
+                    return (exitcode, False)
+                elif not quiet:
+                    writemsg_level(" ".join(git_set_remote_url_cmd) + "\n")
+
+        git_cmd = f"{self.bin_command} fetch {git_remote}{git_cmd_opts}"
 
         if not quiet:
             writemsg_level(git_cmd + "\n")
@@ -447,7 +480,15 @@ class GitSync(NewBase):
                 env = os.environ.copy()
                 env["GNUPGHOME"] = openpgp_env.home
 
-            rev_cmd = [self.bin_command, "log", "-n1", "--pretty=format:%G?", revision]
+            rev_cmd = [
+                self.bin_command,
+                "-c",
+                "log.showsignature=0",
+                "log",
+                "-n1",
+                "--pretty=format:%G?",
+                revision,
+            ]
             try:
                 status = portage._unicode_decode(
                     subprocess.check_output(

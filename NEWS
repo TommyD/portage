@@ -1,5 +1,56 @@
+Release notes take the form of the following optional categories:
+[Optional short blurb/summary]
+* Breaking changes
+* Security
+* Features
+* Bug fixes
+* Cleanups
+
+portage-3.0.54 (2023-10-25)
+--------------
+
+Zac has continued working on preparing us for the 'spawn' multiprocessing
+method.
+
+Breaking changes:
+* Finally ban non-PMS helpers portageq, prepinfo, prepman, prepstrip and
+  prepallstrip (bug #899898, bug #906129, bug #906156).
+
+Features:
+* sync: git: Pass --verbose to git when emerge --sync --verbose.
+
+* sync: git: Forcefully update git remote to match sync-uri for non-volatile
+  repositories (bug #905869).
+
+* emerge: Make --binpkg-respect-use output far more concise (don't show
+  packages missing from the merge list and don't show packages w/ multiple
+  BUILD_IDs).
+
+Bug fixes:
+* SpawnProcess, ForkProcess: Pass stdin via fd_pipes for non-background. This
+  fixes e.g. emerge --sync --ask (bug #916116).
+
+* _emerge: Fix looking up package name for error colorization (bug #915551).
+
+* sync: git: Handle when git is configured with 'log.showSignature'.
+
+* StaticFileSet: Fix os.walk for utf8_mode (bug #916182). This broke app-portage/unsymlink-lib.
+
+Cleanups:
+* MergeProcess: Support QueryCommand with spawn start method (bug #916106)
+
+* vardbapi.unpack_contents: Support spawn start method (bug #916112)
+
+* vardbapi.unpack_metadata: Support spawn start method (bug #916108)
+
+* ForkProcess: Implement fd_pipes via send_handle for spawn start method (non-fork)
+  (bug #915896).
+
 portage-3.0.53 (2023-10-20)
 --------------
+
+Standard mix of bug fixes and new features, along with Zac's continued work
+on preparing us for the spawn multiprocessing method.
 
 Features:
 * GNUMAKEFLAGS: also specify "-l $(nproc)", that is, limit by load average,
@@ -27,8 +78,14 @@ Bug fixes:
 
 * Eliminate unnecessary package reinstalls (bug #915494).
 
+* Update the git remote URL of an overlay with its configured sync-uri
+  when necessary (bug #905869).
+
 portage-3.0.52 (2023-10-03)
 --------------
+
+This release has a nice speedup for backtracking caching and supports eclean-pkg
+removing invalid binpkgs.
 
 Breaking changes:
 * FEATURES=pkgdir-index-trusted is now on by default. This improves performance
@@ -75,6 +132,8 @@ Cleanups:
 portage-3.0.51 (2023-08-20)
 --------------
 
+This release features better debug logging in particular.
+
 Features:
 * emerge: Set up logging immediately and respect --debug for log level.
 
@@ -99,6 +158,9 @@ Bug fixes:
 
 portage-3.0.50 (2023-08-09)
 --------------
+
+This release has a major build system rework to support PEP517 by migrating
+to meson-python, thanks to Chewi!
 
 Breaking changes:
 * The minimum supported Python version is now >= Python 3.9.

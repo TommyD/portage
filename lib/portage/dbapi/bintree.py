@@ -1,4 +1,4 @@
-# Copyright 1998-2021 Gentoo Authors
+# Copyright 1998-2023 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 __all__ = ["bindbapi", "binarytree"]
@@ -129,8 +129,29 @@ class bindbapi(fakedbapi):
             "USE",
             "_mtime_",
         }
-        self._aux_cache_slot_dict = slot_dict_class(self._aux_cache_keys)
         self._aux_cache = {}
+        self._aux_cache_slot_dict_cache = None
+
+    @property
+    def _aux_cache_slot_dict(self):
+        if self._aux_cache_slot_dict_cache is None:
+            self._aux_cache_slot_dict_cache = slot_dict_class(self._aux_cache_keys)
+        return self._aux_cache_slot_dict_cache
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        # These attributes are not picklable, so they are automatically
+        # regenerated after unpickling.
+        state["_aux_cache_slot_dict_cache"] = None
+        state["_instance_key"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        if self._multi_instance:
+            self._instance_key = self._instance_key_multi_instance
+        else:
+            self._instance_key = self._instance_key_cpv
 
     @property
     def writable(self):
