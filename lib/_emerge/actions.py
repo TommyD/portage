@@ -1,4 +1,4 @@
-# Copyright 1999-2021 Gentoo Authors
+# Copyright 1999-2023 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 import collections
@@ -843,7 +843,7 @@ def action_depclean(
                 )
         if not matched_packages:
             writemsg_level(f">>> No packages selected for removal by {action}\n")
-            return 0
+            return 1
 
     # The calculation is done in a separate function so that depgraph
     # references go out of scope and the corresponding memory
@@ -1568,11 +1568,12 @@ def _calc_depclean(settings, trees, ldpath_mtimes, myopts, action, args_set, spi
         graph = digraph()
         del cleanlist[:]
 
+        installtime = UnmergeDepPriority(installtime=True, runtime=True)
         runtime = UnmergeDepPriority(runtime=True)
         runtime_post = UnmergeDepPriority(runtime_post=True)
         buildtime = UnmergeDepPriority(buildtime=True)
         priority_map = {
-            "IDEPEND": runtime,
+            "IDEPEND": installtime,
             "RDEPEND": runtime,
             "PDEPEND": runtime_post,
             "BDEPEND": buildtime,
@@ -1642,7 +1643,11 @@ def _calc_depclean(settings, trees, ldpath_mtimes, myopts, action, args_set, spi
                                 if mypriority.runtime:
                                     mypriority.runtime_slot_op = True
 
-                            graph.add(child_node, node, priority=mypriority)
+                            # Drop direct circular deps because the unmerge order
+                            # calculation does not handle them well as demonstrated
+                            # by the test case for bug 916135.
+                            if child_node is not node:
+                                graph.add(child_node, node, priority=mypriority)
 
         if debug:
             writemsg_level("\nunmerge digraph:\n\n", noiselevel=-1, level=logging.DEBUG)
@@ -1679,6 +1684,8 @@ def _calc_depclean(settings, trees, ldpath_mtimes, myopts, action, args_set, spi
                         break
                 if not nodes:
                     raise AssertionError("no root nodes")
+                # Sort nodes for deterministic results.
+                nodes.sort(reverse=True)
                 if ignore_priority is not None:
                     # Some deps have been dropped due to circular dependencies,
                     # so only pop one node in order to minimize the number that

@@ -930,6 +930,7 @@ class Scheduler(PollScheduler):
                     current_task = clean_phase
                     clean_phase.start()
                     await clean_phase.async_wait()
+                    current_task = None
 
                 if x.built:
                     tree = "bintree"
@@ -981,6 +982,7 @@ class Scheduler(PollScheduler):
                         self._record_pkg_failure(x, settings, verifier.returncode)
                         continue
 
+                    current_task = None
                     if fetched:
                         bintree.inject(
                             x.cpv,
@@ -990,7 +992,16 @@ class Scheduler(PollScheduler):
 
                     infloc = os.path.join(build_dir_path, "build-info")
                     ensure_dirs(infloc)
-                    await bintree.dbapi.unpack_metadata(settings, infloc, loop=loop)
+                    try:
+                        await bintree.dbapi.unpack_metadata(settings, infloc, loop=loop)
+                    except portage.exception.SignatureException as e:
+                        writemsg(
+                            f"!!! Invalid binary package: '{bintree.getname(x.cpv)}', {e}\n",
+                            noiselevel=-1,
+                        )
+                        failures += 1
+                        self._record_pkg_failure(x, settings, 1)
+                        continue
                     ebuild_path = os.path.join(infloc, x.pf + ".ebuild")
                     settings.configdict["pkg"]["EMERGE_FROM"] = "binary"
                     settings.configdict["pkg"]["MERGE_TYPE"] = "binary"
@@ -1030,6 +1041,8 @@ class Scheduler(PollScheduler):
                 current_task = pretend_phase
                 pretend_phase.start()
                 ret = await pretend_phase.async_wait()
+                # Leave current_task assigned in order to trigger clean
+                # on success in the below finally block.
                 if ret != os.EX_OK:
                     failures += 1
                     self._record_pkg_failure(x, settings, ret)
