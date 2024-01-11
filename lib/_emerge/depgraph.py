@@ -679,6 +679,12 @@ class depgraph:
 
         self.query = UserQuery(myopts).query
 
+        # Set up a per-instance memoization cache for the
+        # _slot_operator_check_reverse_dependencies() method:
+        self._slot_operator_check_reverse_dependencies = functools.lru_cache(
+            maxsize=1000
+        )(self._slot_operator_check_reverse_dependencies)
+
     def _index_binpkgs(self):
         for root in self._frozen_config.trees:
             bindb = self._frozen_config.trees[root]["bintree"].dbapi
@@ -2214,7 +2220,8 @@ class depgraph:
 
         return None
 
-    @functools.lru_cache(maxsize=100)
+    # This method is memoized on a per-instance basis via a decorator applied
+    # in __init__().
     def _slot_operator_check_reverse_dependencies(
         self, existing_pkg, candidate_pkg, replacement_parent=None
     ):
@@ -11394,7 +11401,7 @@ def _spinner_start(spinner, myopts):
     spinner.start_time = time.time()
 
 
-def _spinner_stop(spinner):
+def _spinner_stop(spinner, backtracked: int = -1, max_retries: int = -1):
     if spinner is None or spinner.update == spinner.update_quiet:
         return
 
@@ -11407,7 +11414,14 @@ def _spinner_stop(spinner):
 
     stop_time = time.time()
     time_fmt = f"{stop_time - spinner.start_time:.2f}"
-    portage.writemsg_stdout(f"Dependency resolution took {darkgreen(time_fmt)} s.\n\n")
+
+    backtrack_info = ""
+    if backtracked >= 0:
+        backtrack_info = f" (backtrack: {backtracked}/{max_retries})"
+
+    portage.writemsg_stdout(
+        f"Dependency resolution took {darkgreen(time_fmt)} s{backtrack_info}.\n\n"
+    )
 
 
 def backtrack_depgraph(
@@ -11423,13 +11437,15 @@ def backtrack_depgraph(
 
     Raises PackageSetNotFound if myfiles contains a missing package set.
     """
+    backtracked, max_retries = -1, -1
     _spinner_start(spinner, myopts)
     try:
-        return _backtrack_depgraph(
+        success, mydepgraph, favorites, backtracked, max_retries = _backtrack_depgraph(
             settings, trees, myopts, myparams, myaction, myfiles, spinner
         )
+        return (success, mydepgraph, favorites)
     finally:
-        _spinner_stop(spinner)
+        _spinner_stop(spinner, backtracked, max_retries)
 
 
 def _backtrack_depgraph(
@@ -11440,7 +11456,7 @@ def _backtrack_depgraph(
     myaction: Optional[str],
     myfiles: list[str],
     spinner: "_emerge.stdout_spinner.stdout_spinner",
-) -> tuple[Any, depgraph, list[str]]:
+) -> tuple[Any, depgraph, list[str], int, int]:
     debug = "--debug" in myopts
     mydepgraph = None
     max_retries = myopts.get("--backtrack", 10)
@@ -11533,7 +11549,7 @@ def _backtrack_depgraph(
         )
         success, favorites = mydepgraph.select_files(myfiles)
 
-    return (success, mydepgraph, favorites)
+    return (success, mydepgraph, favorites, backtracked, max_retries)
 
 
 def resume_depgraph(

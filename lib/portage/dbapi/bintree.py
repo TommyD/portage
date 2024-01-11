@@ -485,6 +485,7 @@ class binarytree:
         self._remotepkgs = None  # remote metadata indexed by cpv
         self._additional_pkgs = {}
         self.invalids = []
+        self.invalid_paths: dict[str, list[str]] = {}
         self.settings = settings
         self._pkg_paths = {}
         self._populating = False
@@ -802,7 +803,13 @@ class binarytree:
             except PortageException:
                 pass
 
-    def populate(self, getbinpkgs=False, getbinpkg_refresh=False, add_repos=()):
+    def populate(
+        self,
+        getbinpkgs=False,
+        getbinpkg_refresh=False,
+        add_repos=(),
+        force_reindex=False,
+    ):
         """
         Populates the binarytree with package metadata.
 
@@ -832,6 +839,7 @@ class binarytree:
         try:
             update_pkgindex = self._populate_local(
                 reindex="pkgdir-index-trusted" not in self.settings.features
+                or force_reindex
             )
 
             if update_pkgindex and self.dbapi.writable:
@@ -1017,12 +1025,14 @@ class binarytree:
                             noiselevel=-1,
                         )
                         self.invalids.append(myfile[:-5])
+                        self.invalid_paths[myfile] = [full_path]
                         continue
 
                     try:
                         binpkg_format = get_binpkg_format(myfile)
                     except InvalidBinaryPackageFormat:
                         self.invalids.append(myfile[:-5])
+                        self.invalid_paths[myfile[:-5]] = [full_path]
                         continue
 
                     if gpkg_only:
@@ -1040,6 +1050,10 @@ class binarytree:
                         else:
                             binpkg_format = "gpkg"
 
+                    for ext in SUPPORTED_XPAK_EXTENSIONS + SUPPORTED_GPKG_EXTENSIONS:
+                        if myfile.endswith(ext):
+                            mypkg = myfile[: -len(ext)]
+                            break
                     try:
                         pkg_metadata = self._read_metadata(
                             full_path,
@@ -1052,14 +1066,11 @@ class binarytree:
                             f"!!! Invalid binary package: '{full_path}', {e}\n",
                             noiselevel=-1,
                         )
+                        self.invalid_paths[mypkg] = [full_path]
                         continue
                     mycat = pkg_metadata.get("CATEGORY", "")
                     mypf = pkg_metadata.get("PF", "")
                     slot = pkg_metadata.get("SLOT", "")
-                    for ext in SUPPORTED_XPAK_EXTENSIONS + SUPPORTED_GPKG_EXTENSIONS:
-                        if myfile.endswith(ext):
-                            mypkg = myfile[: -len(ext)]
-                            break
                     if not mycat or not mypf or not slot:
                         # old-style or corrupt package
                         writemsg(
@@ -1089,6 +1100,7 @@ class binarytree:
                         for line in textwrap.wrap("".join(msg), 72):
                             writemsg(f"!!! {line}\n", noiselevel=-1)
                         self.invalids.append(mypkg)
+                        self.invalid_paths[mypkg] = [full_path]
                         continue
 
                     multi_instance = False
@@ -1230,11 +1242,33 @@ class binarytree:
 
         return pkgindex if update_pkgindex else None
 
+    def _run_trust_helper(self):
+        portage_trust_helper = self.settings.get("PORTAGE_TRUST_HELPER", "")
+        if portage_trust_helper == "":
+            return
+        try:
+            ret = subprocess.run(portage_trust_helper)
+        except FileNotFoundError:
+            writemsg(
+                _(
+                    "\n!!! Portage trust helper %s for binary packages not found\n!!! Continuing, but did you install app-portage/getuto?\n"
+                )
+                % portage_trust_helper,
+                noiselevel=-1,
+            )
+            return
+        ret.check_returncode()
+
     def _populate_remote(self, getbinpkg_refresh=True):
         self._remote_has_index = False
         self._remotepkgs = {}
 
         if "binpkg-request-signature" in self.settings.features:
+            # This is somewhat broken, we *should* run the trust helper always
+            # when binpackages are involved, not only when we refuse unsigned
+            # ones. (If the keys have expired we end up refusing signed but
+            # technically invalid packages...)
+            self._run_trust_helper()
             gpkg_only = True
         else:
             gpkg_only = False

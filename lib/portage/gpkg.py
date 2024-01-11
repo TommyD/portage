@@ -120,21 +120,13 @@ class tar_stream_writer:
         if cmd is None:
             self.proc = None
         else:
-            if sys.hexversion >= 0x03090000:
-                self.proc = subprocess.Popen(
-                    cmd,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    user=self.uid,
-                    group=self.gid,
-                )
-            else:
-                self.proc = subprocess.Popen(
-                    cmd,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    preexec_fn=self._drop_privileges,
-                )
+            self.proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                user=self.uid,
+                group=self.gid,
+            )
 
             self.read_thread = threading.Thread(
                 target=self._cmd_read_thread, name="tar_stream_cmd_read", daemon=True
@@ -149,29 +141,6 @@ class tar_stream_writer:
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
-
-    def _drop_privileges(self):
-        if self.uid:
-            try:
-                os.setuid(self.uid)
-            except PermissionError:
-                writemsg(
-                    colorize(
-                        "BAD", f"!!! Drop root privileges to user {self.uid} failed."
-                    )
-                )
-                raise
-
-        if self.gid:
-            try:
-                os.setgid(self.gid)
-            except PermissionError:
-                writemsg(
-                    colorize(
-                        "BAD", f"!!! Drop root privileges to group {self.gid} failed."
-                    )
-                )
-                raise
 
     def kill(self):
         """
@@ -318,21 +287,13 @@ class tar_stream_reader:
             self.proc = None
         else:
             # Start external decompressor
-            if sys.hexversion >= 0x03090000:
-                self.proc = subprocess.Popen(
-                    cmd,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    user=self.uid,
-                    group=self.gid,
-                )
-            else:
-                self.proc = subprocess.Popen(
-                    cmd,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    preexec_fn=self._drop_privileges,
-                )
+            self.proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                user=self.uid,
+                group=self.gid,
+            )
             self.read_io = self.proc.stdout
             # Start stdin block writing thread
             self.thread = threading.Thread(
@@ -378,29 +339,6 @@ class tar_stream_reader:
             if self.killed is False:
                 writemsg(colorize("BAD", f"GPKG subprocess failed: {self.cmd} \n"))
                 raise CompressorOperationFailed("PIPE broken")
-
-    def _drop_privileges(self):
-        if self.uid:
-            try:
-                os.setuid(self.uid)
-            except PermissionError:
-                writemsg(
-                    colorize(
-                        "BAD", f"!!! Drop root privileges to user {self.uid} failed."
-                    )
-                )
-                raise
-
-        if self.gid:
-            try:
-                os.setgid(self.gid)
-            except PermissionError:
-                writemsg(
-                    colorize(
-                        "BAD", f"!!! Drop root privileges to group {self.gid} failed."
-                    )
-                )
-                raise
 
     def kill(self):
         """
@@ -575,26 +513,15 @@ class checksum_helper:
             )
             gpg_verify_command = [x for x in gpg_verify_command if x != ""]
 
-            if sys.hexversion >= 0x03090000:
-                self.gpg_proc = subprocess.Popen(
-                    gpg_verify_command,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    env=env,
-                    user=self.uid,
-                    group=self.gid,
-                )
-
-            else:
-                self.gpg_proc = subprocess.Popen(
-                    gpg_verify_command,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    env=env,
-                    preexec_fn=self._drop_privileges,
-                )
+            self.gpg_proc = subprocess.Popen(
+                gpg_verify_command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                user=self.uid,
+                group=self.gid,
+            )
 
     def __del__(self):
         self.finish()
@@ -619,29 +546,6 @@ class checksum_helper:
         if (not good_signature) or (not trust_signature):
             writemsg(colorize("BAD", f"!!!\n{self.gpg_result.decode()}"))
             raise InvalidSignature("GPG verify failed")
-
-    def _drop_privileges(self):
-        if self.uid:
-            try:
-                os.setuid(self.uid)
-            except PermissionError:
-                writemsg(
-                    colorize(
-                        "BAD", f"!!! Drop root privileges to user {self.uid} failed."
-                    )
-                )
-                raise
-
-        if self.gid:
-            try:
-                os.setgid(self.gid)
-            except PermissionError:
-                writemsg(
-                    colorize(
-                        "BAD", f"!!! Drop root privileges to group {self.gid} failed."
-                    )
-                )
-                raise
 
     def update(self, data):
         """
